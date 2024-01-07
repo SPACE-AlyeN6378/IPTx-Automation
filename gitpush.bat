@@ -14,7 +14,7 @@ set /p COMMIT_MESSAGE=Enter your commit message:
 git commit -m "%COMMIT_MESSAGE%"
 
 REM Push to GitHub (master branch)
-git push -u origin master
+git push -u origin main
 
 echo Upload to GitHub complete!
 pause
