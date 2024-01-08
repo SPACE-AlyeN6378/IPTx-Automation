@@ -2,19 +2,26 @@ from typing import List, Union, Tuple
 from components.interfaces.interface import Interface
 from enum import Enum
 
-class Mode(Enum): # ENUM for switchport modes
+
+class Mode(Enum):  # ENUM for switchport modes
     NULL = 0
     ACCESS = 1
     TRUNK = 2
 
-class Connector(Interface):
 
+class Duplex(Enum):
+    AUTO = "auto"
+    FULL = "full"
+    HALF = "half"
+
+
+class Connector(Interface):
     BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
                   "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
-    
-    def __init__(self, int_type: str, port: Union[str, int], cidr: str=None, bandwidth: int=None,
-                 mtu: int = 1500, duplex: str="auto") -> None:
-        
+
+    def __init__(self, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
+                 mtu: int = 1500, duplex: str = Duplex.AUTO) -> None:
+
         super().__init__(int_type, port, cidr)
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
@@ -23,8 +30,6 @@ class Connector(Interface):
 
         self.vlans = set()
         self.__switchport_mode = Mode.NULL
-        
-        
 
     # Check if the interface type is actually a connector (e.g. Ethernet)
     def validate_port(self) -> None:
@@ -33,11 +38,12 @@ class Connector(Interface):
         default_types = Connector.BANDWIDTHS.keys()
 
         if self.int_type not in default_types:
-            raise TypeError(f"Invalid interface type '{self.int_type}' - Please use the following interfaces {", ".join(default_types)}")
-    
-    def config(self, cidr: str=None, bandwidth: str=None, mtu: str=None, generate_cmd=True):
+            raise TypeError(
+                f"Invalid interface type '{self.int_type}' - Please use the following interfaces {', '.join(default_types)}")
+
+    def config(self, cidr: str = None, bandwidth: str = None, mtu: str = None, generate_cmd=True):
         cisco_commands = super().config(cidr, generate_cmd)
-        
+
         if bandwidth:
             self.bandwidth = bandwidth
 
@@ -48,7 +54,7 @@ class Connector(Interface):
             cisco_commands.append("no shutdown")
             cisco_commands.append(f"mtu {self.mtu}")
             cisco_commands.append(f"bandwidth {self.bandwidth}")
-        
+
         return cisco_commands
 
     def connect_to(self, node):
@@ -57,7 +63,7 @@ class Connector(Interface):
     # VLAN Functions
     def __access_command(self) -> List[str]:
         ios_commands = []
-        
+
         if len(self.vlans) == 1:
             if self.__switchport_mode != Mode.ACCESS:
                 self.__switchport_mode = Mode.ACCESS
@@ -78,15 +84,15 @@ class Connector(Interface):
                 ]
         else:
             print("\n* REFUSED: This connector should hold only one VLAN")
-        
+
         return ios_commands
-    
+
     def __disable_both_command(self) -> List[str]:
         ios_commands = []
 
         if not self.vlans:
             self.__switchport_mode = Mode.NULL
-            
+
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
                 "no switchport mode trunk",
@@ -97,12 +103,12 @@ class Connector(Interface):
             print("* REFUSED: Non-empty VLAN list")
 
         return ios_commands
-    
+
     def __trunk_command(self, *vlan_ids: int) -> List[str]:
 
         if not vlan_ids:
             raise ValueError("Missing parameters for VLAN IDs")
-        
+
         if self.__switchport_mode != Mode.TRUNK:
             self.__switchport_mode = Mode.TRUNK
 
@@ -110,7 +116,7 @@ class Connector(Interface):
                 f"interface {self.int_type}{self.port}",
                 "switchport encapsulation dot1q",
                 # switchport trunk native vlan <native_vlan_id>
-                f"switchport trunk allowed vlan {",".join(str(vlan_id) for vlan_id in self.vlans)}",
+                f"switchport trunk allowed vlan {','.join(str(vlan_id) for vlan_id in self.vlans)}",
                 "switchport mode trunk",
                 "switchport nonegotiate",
                 "exit"
@@ -120,19 +126,17 @@ class Connector(Interface):
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
                 # switchport trunk native vlan <native_vlan_id>
-                f"switchport trunk allowed vlan add {",".join(str(vlan_id) for vlan_id in vlan_ids)}",
+                f"switchport trunk allowed vlan add {','.join(str(vlan_id) for vlan_id in vlan_ids)}",
                 "exit"
             ]
 
-        return ios_commands 
+        return ios_commands
 
     def __trunk_replace_command(self, *vlan_ids: int) -> List[str]:
-        
-        
-        
+
         ios_commands = [
             f"interface {self.int_type}{self.port}",
-            f"switchport trunk allowed vlan {",".join(str(vlan_id) for vlan_id in vlan_ids)}",
+            f"switchport trunk allowed vlan {','.join(str(vlan_id) for vlan_id in vlan_ids)}",
             "exit"
         ]
 
@@ -143,7 +147,7 @@ class Connector(Interface):
 
         return ios_commands
 
-    def __trunk_remove_command(self, vlan_id: int) -> List[str]: 
+    def __trunk_remove_command(self, vlan_id: int) -> List[str]:
         if self.__switchport_mode != Mode.TRUNK:
             raise ConnectionError("This connector is not in switchport trunk mode")
 
@@ -154,53 +158,52 @@ class Connector(Interface):
         ]
 
         return ios_commands
-    
-    def assign_vlan(self, *vlan_ids: int, trunking: bool=False) -> List[str]:
+
+    def assign_vlan(self, *vlan_ids: int, trunking: bool = False) -> List[str]:
         # No empty parameters
-        if not vlan_ids:    
+        if not vlan_ids:
             raise ValueError("Missing parameters for VLAN IDs")
         # All VLAN IDs must be an integer
         if any(not isinstance(vlan_id, int) for vlan_id in vlan_ids):
             raise TypeError("All VLAN IDs must be an integer")
-        
+
         for vlan_id in vlan_ids:
             self.vlans.add(vlan_id)
 
-        if len(self.vlans) > 1 or trunking: # Multiple VLANs
+        if len(self.vlans) > 1 or trunking:  # Multiple VLANs
             return self.__trunk_command(*vlan_ids)
         else:
             return self.__access_command()
-        
-    def replace_vlan(self, *vlan_ids: int, trunking: bool=False) -> List[str]:
+
+    def replace_vlan(self, *vlan_ids: int, trunking: bool = False) -> List[str]:
         # No empty parameters
-        if not vlan_ids:    
+        if not vlan_ids:
             raise ValueError("Missing parameters for VLAN IDs")
         # All VLAN IDs must be an integer
         if any(not isinstance(vlan_id, int) for vlan_id in vlan_ids):
             raise TypeError("All VLAN IDs must be an integer")
-        
+
         self.vlans = set(vlan_ids)
 
-        if len(self.vlans) > 1 or trunking: # Multiple VLANs
+        if len(self.vlans) > 1 or trunking:  # Multiple VLANs
             return self.__trunk_replace_command(*vlan_ids)
         else:
             return self.__access_command()
-        
-    def remove_vlan(self, vlan_id: int, trunking: bool=False) -> List[str]:
-        
+
+    def remove_vlan(self, vlan_id: int, trunking: bool = False) -> List[str]:
+
         if not isinstance(vlan_id, int):
             raise TypeError("VLAN ID must be an integer")
-        
+
         self.vlans.discard(vlan_id)
 
-        if len(self.vlans) > 1 or trunking: # Multiple VLANs
+        if len(self.vlans) > 1 or trunking:  # Multiple VLANs
             return self.__trunk_remove_command(vlan_id)
         elif len(self.vlans) == 1:
             return self.__access_command()
         else:
             if not trunking:
                 return self.__disable_both_command()
-
 
 # More features:
 #   - Port security
