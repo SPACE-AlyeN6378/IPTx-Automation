@@ -68,9 +68,8 @@ class Interface:
     def validate_port(self) -> None:
 
         if self.int_type in ["Loopback", "Tunnel", "VLAN"]:
-            if not isinstance(self.port, int):
-                if self.port < 0:
-                    raise ValueError(f"Invalid format: '{self.port}' - Please use positive integers")
+            if not isinstance(self.port, int) or self.port < 0:
+                raise ValueError(f"Invalid format: '{self.port}' - Please use positive integers")
 
         else:
             numbers = self.port.split("/")
@@ -134,6 +133,7 @@ class Interface:
         if self.ip_address and self.subnet_mask:
             ios_commands.append(f"ip address {self.ip_address} {self.subnet_mask}")
 
+        ios_commands.append("exit")
         return ios_commands
 
     # Network Address

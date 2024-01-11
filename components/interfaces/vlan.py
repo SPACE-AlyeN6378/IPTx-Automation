@@ -46,7 +46,10 @@ class VLAN:
             ios_commands.append(f"name {self.name}")
 
         if self.svi.ip_address:
-            ios_commands.append(f"interface vlan {self.vlan_id}")
-            ios_commands.append(f"ip address {self.svi.ip_address} {self.svi.subnet_mask}")
+            ios_commands.extend([
+                f"interface vlan {self.vlan_id}",
+                f"ip address {self.svi.ip_address} {self.svi.subnet_mask}"
+            ])
 
+        ios_commands.append("exit")
         return ios_commands

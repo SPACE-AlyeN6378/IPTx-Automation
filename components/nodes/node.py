@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Type
+from typing import Type, List
 from components.interfaces.interface_list import InterfaceList, Connector
 from components.interfaces.interface import Interface
+from components.interfaces.loopback import Loopback
 from components.nodes.notfound_error import NotFoundError
+from colorama import Style, Fore
+import pyperclip
 
 
 
@@ -20,7 +22,12 @@ class Node:
         self.x = x
         self.y = y
         self.interfaces = interfaces
-        self.cfg_commands = []
+        self.cfg_commands = ["configure terminal", f"hostname {hostname}", "end\n"]
+
+    def _add_cmds(self, *commands: str):
+        end = self.cfg_commands.pop()
+        self.cfg_commands.extend(commands)
+        self.cfg_commands.append(end)
 
     def get_int(self, port: str):
         return self.interfaces[port]
@@ -33,16 +40,24 @@ class Node:
 
         return result
 
+    def set_hostname(self, hostname: str):
+        self.hostname = hostname
+        self.__add_cmds(f"hostname {hostname}")
+
+    def set_position(self, x: int = None, y: int = None):
+        if x:
+            self.x = x
+        if y:
+            self.y = y
+
     def get_loopback(self, loopback_id: int):
         return self.interfaces[f"L{loopback_id}"]
 
-    def add_int(self, interface: Interface) -> None:
+    def add_int(self, interface: Connector | Loopback) -> None:
         self.interfaces.push(interface)
 
     def move_int(self, interface: str | Interface) -> Interface:
         return self.interfaces.pop(interface)
-    
-
 
     def generate_ip_config(self):
         ios_commands = []
@@ -60,5 +75,11 @@ class Node:
         
         self.interfaces[port].connect_to(destination_node)
 
-class Endpoint(Node):
-    pass
+    def send_command(self):
+        for command in self.cfg_commands:
+            print(f"{Fore.GREEN}{command}{Style.RESET_ALL}")
+
+        pyperclip.copy("\n".join(self.cfg_commands))
+
+        # self.cfg_commands = ["configure terminal", "end"]
+

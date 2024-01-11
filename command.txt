@@ -1,0 +1,29 @@
+configure terminal
+hostname SW1
+vlan 10
+exit
+vlan 20
+exit
+vlan 30
+exit
+interface GigabitEthernet0/0
+switchport trunk encapsulation dot1q
+switchport nonegotiate
+switchport mode trunk
+exit
+interface GigabitEthernet0/1
+switchport trunk encapsulation dot1q
+switchport nonegotiate
+switchport mode trunk
+exit
+interface GigabitEthernet0/2
+switchport trunk encapsulation dot1q
+switchport nonegotiate
+switchport mode trunk
+exit
+interface GigabitEthernet0/3
+switchport trunk encapsulation dot1q
+switchport nonegotiate
+switchport mode trunk
+exit
+end
