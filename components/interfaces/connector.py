@@ -1,5 +1,6 @@
 from typing import List, Union, Tuple
 from components.interfaces.interface import Interface
+from colorama import Fore, Style
 from enum import Enum
 
 
@@ -26,6 +27,7 @@ class Connector(Interface):
             raise ValueError(f"Inappropriate configuration for duplex \'{duplex}\'")
 
         super().__init__(int_type, port, cidr)
+        self.shutdown = True
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
         self.duplex = duplex
@@ -42,9 +44,20 @@ class Connector(Interface):
                 f"Invalid interface type '{self.int_type}' - Please use the following "
                 f"interfaces {', '.join(default_types)}")
 
-    def config(self, cidr: str = None, bandwidth: str = None, mtu: str = None, duplex: str = None):
+    def config(self, shutdown: bool = False, cidr: str = None, bandwidth: str = None, mtu: str = None,
+               duplex: str = None):
         ios_commands = super().config(cidr)
-        exit = ios_commands.pop()
+        exit_ = ios_commands.pop()
+
+        if not shutdown:
+            if not self.destination_node:
+                print(f"{Fore.YELLOW}REFUSED: Dangling connector, therefore {str(self)} remains shut{Style.RESET_ALL}")
+                self.shutdown = True
+            else:
+                self.shutdown = False
+        else:
+            self.shutdown = True
+        shutdown_cmd = "shutdown" if shutdown else "no shutdown"
 
         if bandwidth:
             self.bandwidth = bandwidth
@@ -56,14 +69,22 @@ class Connector(Interface):
             self.duplex = duplex
 
         ios_commands.extend([
-            "no shutdown",
+            shutdown_cmd,
             f"mtu {self.mtu}",
             f"bandwidth {self.bandwidth}",
             f"duplex {self.duplex}"
         ])
 
-        ios_commands.append(exit)
+        ios_commands.append(exit_)
         return ios_commands
 
     def connect_to(self, node):
         self.destination_node = node
+
+    def __eq__(self, other):
+        if isinstance(other, Connector):
+            return self.int_type == other.int_type and self.port == other.port \
+                and self.ip_address == other.ip_address and self.subnet_mask == other.subnet_mask \
+                and self.destination_node == other.destination_node
+
+        return False

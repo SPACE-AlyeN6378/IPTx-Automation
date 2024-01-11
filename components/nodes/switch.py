@@ -30,6 +30,13 @@ class SwitchInterface(Connector):
         self.__switch_mode = Mode.NULL
         self.dtp_enabled = True
 
+    def __eq__(self, other):
+        if isinstance(other, SwitchInterface):
+            return self.int_type == other.int_type and self.port == other.port \
+                and self.destination_node == other.destination_node
+
+        return False
+
     # VLAN Functions
     def __access_command(self) -> List[str]:
         ios_commands = []
@@ -97,7 +104,6 @@ class SwitchInterface(Connector):
             if vlan_ids:
                 ios_commands.insert(2,
                                     f"switchport trunk allowed vlan {','.join(str(vlan_id) for vlan_id in self.vlan_ids)}")
-
 
         elif vlan_ids:
             ios_commands = [
