@@ -125,7 +125,7 @@ class Interface:
 
         # Generate cisco command
         ios_commands = []
-        if self.int_type in ("Loopback", "Tunnel", "VLAN"):
+        if self.int_type in ("Tunnel", "VLAN"):
             ios_commands.append(f"interface {self.int_type} {self.port}")
         else:
             ios_commands.append(f"interface {self.int_type}{self.port}")
@@ -135,7 +135,7 @@ class Interface:
 
         ios_commands.append("exit")
         return ios_commands
-
+    
     # Network Address
     def network_address(self):
         ip_address = ipaddress.IPv4Network(f"{self.ip_address}/{self.subnet_mask}", strict=False)

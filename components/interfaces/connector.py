@@ -10,20 +10,14 @@ class Mode(Enum):  # ENUM for switchport modes
     TRUNK = 2
 
 
-class Duplex(Enum):
-    AUTO = "auto"
-    FULL = "full"
-    HALF = "half"
-
-
 class Connector(Interface):
     BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
                   "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
 
     def __init__(self, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
-                 mtu: int = 1500, duplex: str = Duplex.AUTO) -> None:
+                 mtu: int = 1500, duplex: str = "auto") -> None:
 
-        if duplex not in [Duplex.AUTO, Duplex.FULL, Duplex.HALF]:
+        if duplex not in ["auto", "full", "half"]:
             raise ValueError(f"Inappropriate configuration for duplex \'{duplex}\'")
 
         super().__init__(int_type, port, cidr)
@@ -44,47 +38,66 @@ class Connector(Interface):
                 f"Invalid interface type '{self.int_type}' - Please use the following "
                 f"interfaces {', '.join(default_types)}")
 
-    def config(self, shutdown: bool = False, cidr: str = None, bandwidth: str = None, mtu: str = None,
-               duplex: str = None):
+    def config(self, cidr: str = None, bandwidth: int = None, mtu: int = None,
+               duplex: str = None, connect_to=None):
         ios_commands = super().config(cidr)
         exit_ = ios_commands.pop()
 
-        if not shutdown:
-            if not self.destination_node:
-                print(f"{Fore.YELLOW}REFUSED: Dangling connector, therefore {str(self)} remains shut{Style.RESET_ALL}")
-                self.shutdown = True
-            else:
-                self.shutdown = False
-        else:
-            self.shutdown = True
-        shutdown_cmd = "shutdown" if shutdown else "no shutdown"
+        if connect_to:
+            self.destination_node = connect_to
+            self.shutdown = False
 
-        if bandwidth:
-            self.bandwidth = bandwidth
+        shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
+        ios_commands.append(shutdown_cmd)
 
         if mtu:
             self.mtu = mtu
+            ios_commands.append(f"mtu {self.mtu}")
+
+        if bandwidth:
+            self.bandwidth = bandwidth
+            ios_commands.append(f"bandwidth {self.bandwidth}")
 
         if duplex:
+            if duplex not in ["auto", "full", "half"]:
+                raise ValueError(f"Inappropriate configuration for duplex \'{duplex}\'")
+            
             self.duplex = duplex
-
-        ios_commands.extend([
-            shutdown_cmd,
-            f"mtu {self.mtu}",
-            f"bandwidth {self.bandwidth}",
-            f"duplex {self.duplex}"
-        ])
+            ios_commands.append(f"duplex {self.duplex}")
 
         ios_commands.append(exit_)
         return ios_commands
+    
+    def set_shutdown(self, shutdown: bool = True) -> List[str]:
+        if not shutdown and not self.destination_node:
+            print(f"{Fore.YELLOW}REFUSED: Dangling connector, so it remains shut{Style.RESET_ALL}")
+            return []
+        else:
+            self.shutdown = shutdown
+            shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
+            return [
+                f"interface {self.int_type}{self.port}",
+                shutdown_cmd,
+                "exit"
+            ]
 
-    def connect_to(self, node):
+    def connect_to(self, node) -> List[str]:
         self.destination_node = node
+        return self.set_shutdown(False)
+    
+    def disconnect(self) -> List[str]:
+        self.destination_node = None
+        return self.set_shutdown(True)
 
     def __eq__(self, other):
         if isinstance(other, Connector):
-            return self.int_type == other.int_type and self.port == other.port \
-                and self.ip_address == other.ip_address and self.subnet_mask == other.subnet_mask \
+            return self.int_type == other.int_type \
+                and self.port == other.port \
+                and self.ip_address == other.ip_address \
+                and self.subnet_mask == other.subnet_mask \
+                and self.bandwidth == other.bandwidth \
+                and self.mtu == other.mtu \
+                and self.duplex == other.duplex \
                 and self.destination_node == other.destination_node
 
         return False

@@ -5,8 +5,9 @@ from components.interfaces.vlan import VLAN
 from components.nodes.notfound_error import NotFoundError
 from typing import List, Tuple, Any
 from enum import Enum
+from colorama import Fore, Style
 
-from components.interfaces.connector import Connector, Duplex
+from components.interfaces.connector import Connector
 
 
 class Mode(Enum):  # ENUM for switchport modes
@@ -15,26 +16,20 @@ class Mode(Enum):  # ENUM for switchport modes
     TRUNK = 2
 
 
-class Task(Enum):
-    ADD = 3
-    REPLACE = 4
-    DELETE = 5
-
-
 class SwitchInterface(Connector):
     def __init__(self, int_type: str, port: str | int, cidr: str = None, bandwidth: int = None, mtu: int = 1500,
-                 duplex: str = Duplex.AUTO) -> None:
+                 duplex: str = "auto") -> None:
 
         super().__init__(int_type, port, cidr, bandwidth, mtu, duplex)
         self.vlan_ids = set()
         self.__switch_mode = Mode.NULL
         self.dtp_enabled = True
-
-    def __eq__(self, other):
+    
+    # For establishing etherchannels
+    def __and__(self, other):
         if isinstance(other, SwitchInterface):
-            return self.int_type == other.int_type and self.port == other.port \
-                and self.destination_node == other.destination_node
-
+            return self.destination_node == other.destination_node
+        
         return False
 
     # VLAN Functions
@@ -42,31 +37,23 @@ class SwitchInterface(Connector):
         ios_commands = []
 
         if len(self.vlan_ids) == 1:
+
+            ios_commands = [
+                f"interface {self.int_type}{self.port}",
+                f"switchport access vlan {list(self.vlan_ids)[0]}",
+                "exit"
+            ]
+
             if self.__switch_mode != Mode.ACCESS:
                 self.__switch_mode = Mode.ACCESS
-
-                ios_commands = [
-                    f"interface {self.int_type}{self.port}",
-                    "switchport mode access",
-                    f"switchport access vlan {list(self.vlan_ids)[0]}",
-                    "exit"
-                ]
-
-
-
-            else:
-                ios_commands = [
-                    f"interface {self.int_type}{self.port}",
-                    f"switchport access vlan {list(self.vlan_ids)[0]}",
-                    "exit"
-                ]
+                ios_commands.insert(1, "switchport mode access")
 
             if self.dtp_enabled:
                 ios_commands.insert(len(ios_commands) - 1, "switchport nonegotiate")
                 self.dtp_enabled = False
 
         else:
-            print("\n* REFUSED: This connector should hold only one VLAN")
+            print(f"\n{Fore.YELLOW}REFUSED: This connector should hold only one VLAN{Style.RESET_ALL}")
 
         return ios_commands
 

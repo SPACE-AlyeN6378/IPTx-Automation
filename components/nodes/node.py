@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Type, List
+from typing import List, Tuple
 from components.interfaces.interface_list import InterfaceList, Connector
 from components.interfaces.interface import Interface
 from components.interfaces.loopback import Loopback
@@ -13,21 +13,24 @@ import pyperclip
 class Node:
 
     def __init__(self, node_id: str | int, hostname: str = "Node", x: int = 0, y: int = 0,
-                 interfaces: InterfaceList = None) -> None:
-        if interfaces is None:
-            interfaces = InterfaceList()
-
+                 interfaces: List[Interface] | Tuple[Interface] = None) -> None:
+        
         self.node_id = node_id
         self.hostname = hostname
         self.x = x
         self.y = y
-        self.interfaces = interfaces
         self.cfg_commands = ["configure terminal", f"hostname {hostname}", "end\n"]
 
+        if interfaces is None:
+            interfaces = []
+
+        self.interfaces = InterfaceList()
+        self.add_int(*interfaces)
+
     def _add_cmds(self, *commands: str):
-        end = self.cfg_commands.pop()
-        self.cfg_commands.extend(commands)
-        self.cfg_commands.append(end)
+        end_ = self.cfg_commands.pop()
+        self.cfg_commands.extend(list(commands))
+        self.cfg_commands.append(end_)
 
     def get_int(self, port: str):
         return self.interfaces[port]
@@ -53,33 +56,38 @@ class Node:
     def get_loopback(self, loopback_id: int):
         return self.interfaces[f"L{loopback_id}"]
 
-    def add_int(self, interface: Connector | Loopback) -> None:
-        self.interfaces.push(interface)
+    def add_int(self, *interfaces: Connector | Loopback) -> None:
+        self.interfaces.push(*interfaces)
+
+        for interface in interfaces:
+            if isinstance(interface, Connector):
+                self._add_cmds(
+                    *interface.config(bandwidth=interface.bandwidth, mtu=interface.mtu, duplex=interface.duplex)
+                )
+            else:
+                self._add_cmds(
+                    *interface.config()
+                )
 
     def move_int(self, interface: str | Interface) -> Interface:
         return self.interfaces.pop(interface)
-
-    def generate_ip_config(self):
-        ios_commands = []
-        for interface in self.interfaces:
-            ios_commands.extend(interface.config() + ["!"])
-
-        return ios_commands
     
-    def connect(self, port: str, destination_node):
+    def connect(self, port: str, destination_node: Node):
         if not isinstance(destination_node, Node):
-            return TypeError(f"That's not a router, switch or any endpoint device: {str(destination_node)}")
+            raise TypeError(f"That's not a router, switch or any endpoint device: {str(destination_node)}")
         
         if not isinstance(self.interfaces[port], Connector):
-            return TypeError(f"The interface at port '{port}' is not a connector")
+            raise TypeError(f"The interface at port '{port}' is not a connector")
         
-        self.interfaces[port].connect_to(destination_node)
+        self._add_cmds(
+            self.interfaces[port].connect_to(destination_node)
+        )
 
     def send_command(self):
         for command in self.cfg_commands:
             print(f"{Fore.GREEN}{command}{Style.RESET_ALL}")
 
-        pyperclip.copy("\n".join(self.cfg_commands))
+        # pyperclip.copy("\n".join(self.cfg_commands)) # This will be replaced with netmiko soon
 
         # self.cfg_commands = ["configure terminal", "end"]
 

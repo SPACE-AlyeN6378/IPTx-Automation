@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import List
 from components.interfaces.connector import Connector
 from components.interfaces.loopback import Loopback
 from network_error import NetworkError
@@ -79,7 +79,7 @@ class InterfaceList:
         return "[" + ", ".join(str(inf) for inf in self.connectors + self.loopbacks) + "]"
 
     # Adds a couple of interfaces to the list
-    def push(self, *args: Connector | Loopback):
+    def push(self, *args: Connector | Loopback) -> List[str]:
 
         if not all(isinstance(arg, (Connector, Loopback)) for arg in args):
             raise TypeError("All interfaces should be either a connector (e.g. GigabitEthernet) or a loopback")
@@ -87,15 +87,20 @@ class InterfaceList:
         for arg in args:
 
             # First, you check for matching port number and Network IP, to avoid overlapping
+            if arg.ip_address and arg.subnet_mask:
+                networks = [inf.network_address() for inf in self.connectors+self.loopbacks if inf.ip_address]
+                if arg.network_address() in networks:
+                    raise NetworkError(f"ERROR: Overlapping networks in '{arg.int_type}{arg.port}'")
+                
             # For Connectors and Cables
             if isinstance(arg, Connector):
-                if arg.ip_address:
-                    networks = [inf.network_address() for inf in self.connectors if inf.ip_address]
-                    if arg.port in (inf.port for inf in self.connectors) or (arg.network_address() in networks):
-                        raise NetworkError(f"ERROR: Overlapping interfaces in '{arg.port}'")
+                ports = [inf.port for inf in self.connectors]
+                    
+                if arg.port in ports:
+                    raise NetworkError(f"ERROR: Overlapping ports in '{arg.port}'")
 
                 self.connectors.append(arg)
-
+                
             # For Loopbacks
             elif isinstance(arg, Loopback):
                 arg.port = len(self.loopbacks)
@@ -108,6 +113,7 @@ class InterfaceList:
 
         if isinstance(inf, Connector):
             self.connectors.remove(inf)
+
         elif isinstance(inf, Loopback):
             popped_index = self.loopbacks.index(inf)
             self.loopbacks.remove(inf)
