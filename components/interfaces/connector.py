@@ -70,7 +70,7 @@ class Connector(Interface):
     
     def set_shutdown(self, shutdown: bool = True) -> List[str]:
         if not shutdown and not self.destination_node:
-            print(f"{Fore.YELLOW}REFUSED: Dangling connector, so it remains shut{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}DENIED: Dangling connector, so it remains shut{Style.RESET_ALL}")
             return []
         else:
             self.shutdown = shutdown

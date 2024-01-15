@@ -45,11 +45,3 @@ class VLAN:
             ios_commands.extend(self.interface.config(cidr=cidr))
 
         return ios_commands
-    
-    def set_stp_primary_device(self, switch_device) -> None:
-        from components.nodes.switch import Switch
-
-        if not isinstance(switch_device, Switch):
-            raise TypeError(f"This device '{str(switch_device)}' is not a switch")
-        
-        return

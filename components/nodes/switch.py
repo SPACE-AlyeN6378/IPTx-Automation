@@ -3,7 +3,7 @@ from __future__ import annotations
 from components.nodes.node import Node, InterfaceList
 from components.interfaces.vlan import VLAN
 from components.nodes.notfound_error import NotFoundError
-from typing import List, Tuple, Any
+from typing import List
 from enum import Enum
 from colorama import Fore, Style
 
@@ -24,13 +24,6 @@ class SwitchInterface(Connector):
         self.vlan_ids = set()
         self.__switchport_mode = Mode.NULL
         self.dtp_enabled = True
-    
-    # For establishing etherchannels
-    def __and__(self, other):
-        if isinstance(other, SwitchInterface):
-            return self.destination_node == other.destination_node
-        
-        return False
 
     # VLAN Functions
     def __access_command(self) -> List[str]:
@@ -194,6 +187,19 @@ class SwitchInterface(Connector):
         self.vlan_ids.clear()
         return self.__trunk_command()
 
+    def __and__(self, other):
+        if isinstance(other, SwitchInterface):
+            return self.int_type == other.int_type \
+                and self.bandwidth == other.bandwidth \
+                and self.mtu == other.mtu \
+                and self.duplex == other.duplex \
+                and self.destination_node == other.destination_node \
+                and self.__switchport_mode == other.__switchport_mode \
+                and self.__switchport_mode in [Mode.ACCESS, Mode.TRUNK] \
+                and self.vlan_ids == other.vlan_ids
+
+        return False
+
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
@@ -279,7 +285,7 @@ class Switch(Node):
 
     # Spanning-tree (Only the basics) =========================================================
     def enable_stp(self):
-        
+
         if self.__spanning_tree:
             print(f"{Fore.MAGENTA}DENIED: The Spanning-tree Protocol is already enabled{Style.RESET_ALL}")
         else:
@@ -290,15 +296,17 @@ class Switch(Node):
                 self._add_cmds(f"spanning-tree vlan {vlan.vlan_id}")
 
     def disable_stp(self):
-        
+
         if not self.__spanning_tree:
             print(f"{Fore.MAGENTA}DENIED: The Spanning-tree Protocol is already disabled{Style.RESET_ALL}")
         else:
-            print(f"{Fore.YELLOW}WARNING: Disabling spanning tree can lead to network loops, broadcast storms, 
-                  and other issues if not managed carefully.{Style.RESET_ALL}")
-            
+            print(f"{Fore.YELLOW}WARNING: Disabling spanning tree can lead to network loops, broadcast storms, "
+                  f"and other issues if not managed carefully.{Style.RESET_ALL}")
+
             self.__spanning_tree = False
 
             self._add_cmds("no spanning-tree vlan 1")
             for vlan in self.vlans:
                 self._add_cmds(f"no spanning-tree vlan {vlan.vlan_id}")
+
+    # Etherchannel =================================================================================
