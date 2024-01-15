@@ -22,7 +22,7 @@ class SwitchInterface(Connector):
 
         super().__init__(int_type, port, cidr, bandwidth, mtu, duplex)
         self.vlan_ids = set()
-        self.__switch_mode = Mode.NULL
+        self.__switchport_mode = Mode.NULL
         self.dtp_enabled = True
     
     # For establishing etherchannels
@@ -44,8 +44,8 @@ class SwitchInterface(Connector):
                 "exit"
             ]
 
-            if self.__switch_mode != Mode.ACCESS:
-                self.__switch_mode = Mode.ACCESS
+            if self.__switchport_mode != Mode.ACCESS:
+                self.__switchport_mode = Mode.ACCESS
                 ios_commands.insert(1, "switchport mode access")
 
             if self.dtp_enabled:
@@ -53,15 +53,16 @@ class SwitchInterface(Connector):
                 self.dtp_enabled = False
 
         else:
-            print(f"\n{Fore.YELLOW}REFUSED: This connector should hold only one VLAN{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}REFUSED: This connector should hold only one VLAN{Style.RESET_ALL}")
 
         return ios_commands
 
     def __disable_both_command(self) -> List[str]:
         ios_commands = []
 
+        # For this command to work, the VLAN ID list must be empty
         if not self.vlan_ids:
-            self.__switch_mode = Mode.NULL
+            self.__switchport_mode = Mode.NULL
 
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
@@ -70,7 +71,7 @@ class SwitchInterface(Connector):
                 "exit"
             ]
         else:
-            print("* REFUSED: Non-empty VLAN list")
+            print(f"{Fore.YELLOW}REFUSED: Non-empty VLAN list{Style.RESET_ALL}")
 
         return ios_commands
 
@@ -78,8 +79,8 @@ class SwitchInterface(Connector):
 
         ios_commands = []
 
-        if self.__switch_mode != Mode.TRUNK:
-            self.__switch_mode = Mode.TRUNK
+        if self.__switchport_mode != Mode.TRUNK:
+            self.__switchport_mode = Mode.TRUNK
 
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
@@ -117,15 +118,15 @@ class SwitchInterface(Connector):
             ios_commands.insert(1, f"switchport trunk allowed vlan "
                                    f"{','.join(str(vlan_id) for vlan_id in vlan_ids)}")
 
-        if self.__switch_mode != Mode.TRUNK:
-            self.__switch_mode = Mode.TRUNK
+        if self.__switchport_mode != Mode.TRUNK:
+            self.__switchport_mode = Mode.TRUNK
             ios_commands.insert(1, "switchport trunk encapsulation dot1q")
             ios_commands.insert(3, "switchport mode trunk")
 
         return ios_commands
 
     def __trunk_remove_command(self, vlan_id: int) -> List[str]:
-        if self.__switch_mode != Mode.TRUNK:
+        if self.__switchport_mode != Mode.TRUNK:
             raise ConnectionError("This connector is not in switchport trunk mode")
 
         ios_commands = [
@@ -182,14 +183,14 @@ class SwitchInterface(Connector):
         elif len(self.vlan_ids) == 1:
             return self.__access_command()
         else:
-            self.__switch_mode = Mode.NULL
+            self.__switchport_mode = Mode.NULL
             if isinstance(self.destination_node, Switch):
                 return self.__trunk_command()
             else:
                 return self.__disable_both_command()
 
     def default_trunk(self):
-        self.__switch_mode = Mode.NULL
+        self.__switchport_mode = Mode.NULL
         self.vlan_ids.clear()
         return self.__trunk_command()
 
@@ -208,6 +209,7 @@ class Switch(Node):
 
         super().__init__(node_id, hostname, x, y, interfaces)
         self.vlans = []
+        self.__spanning_tree = True
 
     # VLAN Getter by ID
     def vlan(self, vlan_id: int) -> VLAN | None:
@@ -231,6 +233,7 @@ class Switch(Node):
 
         return dictionary
 
+    # VLAN operations ==============================================================================================
     def add_vlan(self, vlan_id: int, name: str = None, cidr=None):
         if self.vlan(vlan_id):
             raise ValueError(f"VLAN with ID {vlan_id} already exists")
@@ -258,7 +261,7 @@ class Switch(Node):
             else:
                 self._add_cmds(*interface.assign_vlan(*vlan_ids))
 
-    def remove_vlan(self, vlan_id: int, ports: str | list | tuple = None):
+    def detach_vlan(self, vlan_id: int, ports: str | list | tuple = None):
         if not self.vlan(vlan_id):
             raise NotFoundError(f"VLAN {vlan_id} not found")
 
@@ -273,3 +276,29 @@ class Switch(Node):
     def default_trunk(self, *ports: str):
         for interface in self.get_ints(*ports):
             self._add_cmds(*interface.default_trunk())
+
+    # Spanning-tree (Only the basics) =========================================================
+    def enable_stp(self):
+        
+        if self.__spanning_tree:
+            print(f"{Fore.MAGENTA}DENIED: The Spanning-tree Protocol is already enabled{Style.RESET_ALL}")
+        else:
+            self.__spanning_tree = True
+
+            self._add_cmds("spanning-tree vlan 1")
+            for vlan in self.vlans:
+                self._add_cmds(f"spanning-tree vlan {vlan.vlan_id}")
+
+    def disable_stp(self):
+        
+        if not self.__spanning_tree:
+            print(f"{Fore.MAGENTA}DENIED: The Spanning-tree Protocol is already disabled{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.YELLOW}WARNING: Disabling spanning tree can lead to network loops, broadcast storms, 
+                  and other issues if not managed carefully.{Style.RESET_ALL}")
+            
+            self.__spanning_tree = False
+
+            self._add_cmds("no spanning-tree vlan 1")
+            for vlan in self.vlans:
+                self._add_cmds(f"no spanning-tree vlan {vlan.vlan_id}")
