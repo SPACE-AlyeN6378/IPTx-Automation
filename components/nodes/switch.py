@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-from components.nodes.node import Node, InterfaceList
+from components.nodes.network_device import NetworkDevice, InterfaceList
 from components.interfaces.vlan import VLAN
 from components.nodes.notfound_error import NotFoundError
-from typing import List
+from typing import List, Union
 from enum import Enum
 from colorama import Fore, Style
 
 from components.interfaces.connector import Connector
 
 
-class Mode(Enum):  # ENUM for switchport modes
+class SwitchMode(Enum):  # ENUM for switchport modes
     NULL = 0
     ACCESS = 1
     TRUNK = 2
+
+
+class Protocol(Enum):
+    ECN_PAGP = 3
+    ECN_LACP = 4
 
 
 class SwitchInterface(Connector):
@@ -22,8 +27,12 @@ class SwitchInterface(Connector):
 
         super().__init__(int_type, port, cidr, bandwidth, mtu, duplex)
         self.vlan_ids = set()
-        self.__switchport_mode = Mode.NULL
+        self.__switchport_mode = SwitchMode.NULL
         self.dtp_enabled = True
+
+        # Etherchannel
+        self.port_channel = 0
+        self.ecn_protocol = Protocol.ECN_NONE
 
     # VLAN Functions
     def __access_command(self) -> List[str]:
@@ -37,8 +46,8 @@ class SwitchInterface(Connector):
                 "exit"
             ]
 
-            if self.__switchport_mode != Mode.ACCESS:
-                self.__switchport_mode = Mode.ACCESS
+            if self.__switchport_mode != SwitchMode.ACCESS:
+                self.__switchport_mode = SwitchMode.ACCESS
                 ios_commands.insert(1, "switchport mode access")
 
             if self.dtp_enabled:
@@ -55,7 +64,7 @@ class SwitchInterface(Connector):
 
         # For this command to work, the VLAN ID list must be empty
         if not self.vlan_ids:
-            self.__switchport_mode = Mode.NULL
+            self.__switchport_mode = SwitchMode.NULL
 
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
@@ -72,8 +81,8 @@ class SwitchInterface(Connector):
 
         ios_commands = []
 
-        if self.__switchport_mode != Mode.TRUNK:
-            self.__switchport_mode = Mode.TRUNK
+        if self.__switchport_mode != SwitchMode.TRUNK:
+            self.__switchport_mode = SwitchMode.TRUNK
 
             ios_commands = [
                 f"interface {self.int_type}{self.port}",
@@ -111,15 +120,15 @@ class SwitchInterface(Connector):
             ios_commands.insert(1, f"switchport trunk allowed vlan "
                                    f"{','.join(str(vlan_id) for vlan_id in vlan_ids)}")
 
-        if self.__switchport_mode != Mode.TRUNK:
-            self.__switchport_mode = Mode.TRUNK
+        if self.__switchport_mode != SwitchMode.TRUNK:
+            self.__switchport_mode = SwitchMode.TRUNK
             ios_commands.insert(1, "switchport trunk encapsulation dot1q")
             ios_commands.insert(3, "switchport mode trunk")
 
         return ios_commands
 
     def __trunk_remove_command(self, vlan_id: int) -> List[str]:
-        if self.__switchport_mode != Mode.TRUNK:
+        if self.__switchport_mode != SwitchMode.TRUNK:
             raise ConnectionError("This connector is not in switchport trunk mode")
 
         ios_commands = [
@@ -144,7 +153,7 @@ class SwitchInterface(Connector):
         for vlan_id in vlan_ids:
             self.vlan_ids.add(vlan_id)
 
-        if len(self.vlan_ids) > 1 or isinstance(self.destination_node, Switch):  # Multiple VLANs
+        if len(self.vlan_ids) > 1 or isinstance(self.destination_device, Switch):  # Multiple VLANs
             return self.__trunk_command(*vlan_ids)
         else:
             return self.__access_command()
@@ -159,7 +168,7 @@ class SwitchInterface(Connector):
 
         self.vlan_ids = set(vlan_ids)
 
-        if len(self.vlan_ids) > 1 or isinstance(self.destination_node, Switch):  # Multiple VLANs
+        if len(self.vlan_ids) > 1 or isinstance(self.destination_device, Switch):  # Multiple VLANs
             return self.__trunk_replace_command(*vlan_ids)
         else:
             return self.__access_command()
@@ -171,19 +180,19 @@ class SwitchInterface(Connector):
 
         self.vlan_ids.discard(vlan_id)
 
-        if len(self.vlan_ids) > 1 or isinstance(self.destination_node, Switch):  # Multiple VLANs
+        if len(self.vlan_ids) > 1 or isinstance(self.destination_device, Switch):  # Multiple VLANs
             return self.__trunk_remove_command(vlan_id)
         elif len(self.vlan_ids) == 1:
             return self.__access_command()
         else:
-            self.__switchport_mode = Mode.NULL
-            if isinstance(self.destination_node, Switch):
+            self.__switchport_mode = SwitchMode.NULL
+            if isinstance(self.destination_device, Switch):
                 return self.__trunk_command()
             else:
                 return self.__disable_both_command()
 
     def default_trunk(self):
-        self.__switchport_mode = Mode.NULL
+        self.__switchport_mode = SwitchMode.NULL
         self.vlan_ids.clear()
         return self.__trunk_command()
 
@@ -193,18 +202,35 @@ class SwitchInterface(Connector):
                 and self.bandwidth == other.bandwidth \
                 and self.mtu == other.mtu \
                 and self.duplex == other.duplex \
-                and self.destination_node == other.destination_node \
+                and self.destination_device == other.destination_device \
                 and self.__switchport_mode == other.__switchport_mode \
-                and self.__switchport_mode in [Mode.ACCESS, Mode.TRUNK] \
+                and self.__switchport_mode in [SwitchMode.ACCESS, SwitchMode.TRUNK] \
                 and self.vlan_ids == other.vlan_ids
 
         return False
 
+    def enable_etherchannel(self, port_channel_num: int, protocol: Union[Protocol.ECN_LACP, Protocol.ECN_PAGP],
+                            unconditional: bool = False):
+        if not (1 <= port_channel_num <= 48):
+            raise ValueError("ERROR: The port-channel number must be between 1 and 48")
 
+        if protocol not in [Protocol.ECN_LACP, Protocol.ECN_PAGP] or protocol is not None:
+            raise ValueError("ERROR: Incorrect protocols. Etherchannels either use PAgP, LACP, or None")
+
+        self.port_channel = port_channel_num
+        self.ecn_protocol = protocol
+
+        if self.port_channel == Protocol.ECN_PAGP:
+            if unconditional
+
+        return ["channel-group 1 mode desirable"]
+
+
+# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 
-class Switch(Node):
+class Switch(NetworkDevice):
 
     def __init__(self, node_id: str | int, hostname: str = "Switch", x: int = 0, y: int = 0,
                  interfaces: InterfaceList = None):
@@ -309,4 +335,4 @@ class Switch(Node):
             for vlan in self.vlans:
                 self._add_cmds(f"no spanning-tree vlan {vlan.vlan_id}")
 
-    # Etherchannel =================================================================================
+    # Ether-channel =================================================================================

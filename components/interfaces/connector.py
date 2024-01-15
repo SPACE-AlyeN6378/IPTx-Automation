@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Any
 from components.interfaces.interface import Interface
 from colorama import Fore, Style
 from enum import Enum
@@ -14,18 +14,22 @@ class Connector(Interface):
     BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
                   "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
 
-    def __init__(self, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
+    def __init__(self, link_id: str | int, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
                  mtu: int = 1500, duplex: str = "auto") -> None:
 
         if duplex not in ["auto", "full", "half"]:
-            raise ValueError(f"Inappropriate configuration for duplex \'{duplex}\'")
+            raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
 
         super().__init__(int_type, port, cidr)
+
         self.shutdown = True
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
         self.duplex = duplex
-        self.destination_node = None
+
+        # Used when a connection is established, otherwise
+        self.destination_device = None
+        self.link_id = None  # Connector ID, aka SCR in F@H for routers
 
     # Check if the interface type is actually a connector (e.g. Ethernet)
     def validate_port(self) -> None:
@@ -35,20 +39,15 @@ class Connector(Interface):
 
         if self.int_type not in default_types:
             raise TypeError(
-                f"Invalid interface type '{self.int_type}' - Please use the following "
+                f"ERROR: Invalid interface type '{self.int_type}' - Please use the following "
                 f"interfaces {', '.join(default_types)}")
 
     def config(self, cidr: str = None, bandwidth: int = None, mtu: int = None,
-               duplex: str = None, connect_to=None):
+               duplex: str = None):
         ios_commands = super().config(cidr)
         exit_ = ios_commands.pop()
 
-        if connect_to:
-            self.destination_node = connect_to
-            self.shutdown = False
-
-        shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
-        ios_commands.append(shutdown_cmd)
+        ios_commands.append("shutdown")
 
         if mtu:
             self.mtu = mtu
@@ -60,7 +59,7 @@ class Connector(Interface):
 
         if duplex:
             if duplex not in ["auto", "full", "half"]:
-                raise ValueError(f"Inappropriate configuration for duplex \'{duplex}\'")
+                raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
             
             self.duplex = duplex
             ios_commands.append(f"duplex {self.duplex}")
@@ -69,7 +68,7 @@ class Connector(Interface):
         return ios_commands
     
     def set_shutdown(self, shutdown: bool = True) -> List[str]:
-        if not shutdown and not self.destination_node:
+        if not shutdown and not self.destination_device:
             print(f"{Fore.MAGENTA}DENIED: Dangling connector, so it remains shut{Style.RESET_ALL}")
             return []
         else:
@@ -81,12 +80,14 @@ class Connector(Interface):
                 "exit"
             ]
 
-    def connect_to(self, node) -> List[str]:
-        self.destination_node = node
+    def connect_to(self, link_id: int | str, node: Any) -> List[str]:
+        self.destination_device = node
+        self.link_id = link_id
         return self.set_shutdown(False)
     
     def disconnect(self) -> List[str]:
-        self.destination_node = None
+        self.destination_device = None
+        self.link_id = None
         return self.set_shutdown(True)
 
     def __eq__(self, other):
@@ -98,6 +99,6 @@ class Connector(Interface):
                 and self.bandwidth == other.bandwidth \
                 and self.mtu == other.mtu \
                 and self.duplex == other.duplex \
-                and self.destination_node == other.destination_node
+                and self.destination_device == other.destination_device
 
         return False

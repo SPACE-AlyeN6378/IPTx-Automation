@@ -2,7 +2,7 @@ from components.interfaces.interface import Interface
 from components.interfaces.interface_list import InterfaceList, Loopback
 from components.interfaces.connector import Connector
 from components.interfaces.vlan import VLAN
-from components.nodes.node import Node
+from components.nodes.network_device import NetworkDevice
 from components.nodes.switch import Switch, SwitchInterface
 
 
@@ -29,7 +29,7 @@ def add_vlans(*switches):
 #     SwitchInterface("GigabitEthernet", "0/1", "192.168.2.2/24")
 # )
 
-node = Node(
+node = NetworkDevice(
     node_id=1,
     hostname="Node1",
     interfaces=[
