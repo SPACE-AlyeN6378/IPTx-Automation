@@ -31,8 +31,9 @@ class SwitchInterface(Connector):
         self.dtp_enabled = True
 
         # Etherchannel
-        self.port_channel = 0
-        self.ecn_protocol = Protocol.ECN_NONE
+        self.port_channel = None
+        self.ecn_protocol = None
+        self.ecn_unconditional = False
 
     # VLAN Functions
     def __access_command(self) -> List[str]:
@@ -55,7 +56,7 @@ class SwitchInterface(Connector):
                 self.dtp_enabled = False
 
         else:
-            print(f"{Fore.YELLOW}REFUSED: This connector should hold only one VLAN{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}DENIED: This connector should hold only one VLAN{Style.RESET_ALL}")
 
         return ios_commands
 
@@ -77,7 +78,7 @@ class SwitchInterface(Connector):
 
         return ios_commands
 
-    def __trunk_command(self, *vlan_ids: int) -> List[str]:
+    def __trunk_add_command(self, *vlan_ids: int) -> List[str]:
 
         ios_commands = []
 
@@ -92,8 +93,8 @@ class SwitchInterface(Connector):
                 "exit"
             ]
             if vlan_ids:
-                ios_commands.insert(2,
-                                    f"switchport trunk allowed vlan {','.join(str(vlan_id) for vlan_id in self.vlan_ids)}")
+                ios_commands.insert(2, f"switchport trunk allowed vlan"
+                                       f" {','.join(str(vlan_id) for vlan_id in self.vlan_ids)}")
 
         elif vlan_ids:
             ios_commands = [
@@ -154,7 +155,7 @@ class SwitchInterface(Connector):
             self.vlan_ids.add(vlan_id)
 
         if len(self.vlan_ids) > 1 or isinstance(self.destination_device, Switch):  # Multiple VLANs
-            return self.__trunk_command(*vlan_ids)
+            return self.__trunk_add_command(*vlan_ids)
         else:
             return self.__access_command()
 
@@ -187,14 +188,15 @@ class SwitchInterface(Connector):
         else:
             self.__switchport_mode = SwitchMode.NULL
             if isinstance(self.destination_device, Switch):
-                return self.__trunk_command()
+                return self.__trunk_add_command()
             else:
                 return self.__disable_both_command()
 
+    # Configure switchport as trunk for all VLANs 1-4094
     def default_trunk(self):
         self.__switchport_mode = SwitchMode.NULL
         self.vlan_ids.clear()
-        return self.__trunk_command()
+        return self.__trunk_add_command()
 
     def __and__(self, other):
         if isinstance(other, SwitchInterface):
@@ -209,19 +211,53 @@ class SwitchInterface(Connector):
 
         return False
 
-    def enable_etherchannel(self, port_channel_num: int, protocol: Union[Protocol.ECN_LACP, Protocol.ECN_PAGP],
-                            unconditional: bool = False):
-        if not (1 <= port_channel_num <= 48):
-            raise ValueError("ERROR: The port-channel number must be between 1 and 48")
+    def enable_etherchannel(self, port_channel_num: int = None,
+                            protocol: Union[Protocol.ECN_LACP, Protocol.ECN_PAGP] = None,
+                            unconditional: bool = None):
 
-        if protocol not in [Protocol.ECN_LACP, Protocol.ECN_PAGP] or protocol is not None:
-            raise ValueError("ERROR: Incorrect protocols. Etherchannels either use PAgP, LACP, or None")
+        # Check for any errors in connection
+        if self.destination_device is None:
+            raise ConnectionError(f"ERROR: Dangling connector {self.int_type}{self.port}")
 
-        self.port_channel = port_channel_num
-        self.ecn_protocol = protocol
+        if not isinstance(self.destination_device, Switch):
+            raise TypeError("ERROR: Ether-channels only supports switches in this backbone network")
 
-        if self.port_channel == Protocol.ECN_PAGP:
-            if unconditional
+        remote_interface = self.destination_device.get_int(self.destination_port)
+
+        # Port channel
+        if remote_interface.port_channel:
+            self.port_channel = remote_interface.port_channel
+        else:
+            if port_channel_num is None:
+                raise ValueError("ERROR: Port channel number not given. The destination device does not have one.")
+            elif not (1 <= port_channel_num <= 48):
+                raise ValueError("ERROR: The port-channel number must be between 1 and 48")
+
+            self.port_channel = port_channel_num
+
+        # Etherchannel Protocols
+        if remote_interface.ecn_protocol in [Protocol.ECN_LACP, Protocol.ECN_PAGP]:
+            self.ecn_protocol = remote_interface.ecn_protocol
+        else:
+            if protocol not in [Protocol.ECN_LACP, Protocol.ECN_PAGP, None]:
+                raise ValueError("ERROR: Incorrect protocols. Ether-channels either use PAgP, LACP, or None")
+
+            self.ecn_protocol = protocol
+
+        # Unconditional
+        if unconditional is not None:
+            self.ecn_unconditional = unconditional
+
+        x = self.ecn_unconditional
+        y = remote_interface.ecn_unconditional
+
+        # RULE: If the remote host ECN protocol is conditional, then the source host counterpart
+        # should always be set to unconditional, otherwise it's any
+        self.ecn_unconditional = (not y) or (x and not y) or (x and y)
+
+        # Generate cisco command
+        if self.ecn_protocol == Protocol.ECN_LACP:
+            if unconditional:
 
         return ["channel-group 1 mode desirable"]
 
@@ -288,7 +324,6 @@ class Switch(NetworkDevice):
 
         for interface in self.get_ints(*ports):
             if replace:
-                pass
                 self._add_cmds(*interface.replace_vlan(*vlan_ids))
             else:
                 self._add_cmds(*interface.assign_vlan(*vlan_ids))

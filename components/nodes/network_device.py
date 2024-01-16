@@ -31,23 +31,16 @@ class NetworkDevice:
         self.cfg_commands.extend(list(commands))
         self.cfg_commands.append(end_)
 
-    def get_int_by_port(self, port: str) -> Interface:  # Get interface
+    def get_int(self, port: str) -> Interface:  # Get interface
         return self.interfaces[port]
 
-    def get_ints_by_port(self, *ports: str) -> List[Interface]:
+    def get_ints(self, *ports: str) -> List[Interface]:
         result = [self.interfaces[port] for port in ports]
         if any(interface is None for interface in result):
             raise NotFoundError(f"ERROR: One of the interfaces is not included in "
                                 f"the list of ports: {str(self.interfaces)}")
 
         return result
-
-    def get_conn_by_id(self, link_id: int | str) -> Connector | None:
-        for connector in self.interfaces.connectors:
-            if connector.link_id == link_id:
-                return connector
-
-        return None
 
     def set_hostname(self, hostname: str):
         self.hostname = hostname

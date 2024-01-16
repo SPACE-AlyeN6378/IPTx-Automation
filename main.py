@@ -29,7 +29,7 @@ def add_vlans(*switches):
 #     SwitchInterface("GigabitEthernet", "0/1", "192.168.2.2/24")
 # )
 
-node = NetworkDevice(
+switch = NetworkDevice(
     node_id=1,
     hostname="Node1",
     interfaces=[

@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Any
+from typing import List, Union, Any
 from components.interfaces.interface import Interface
 from colorama import Fore, Style
 from enum import Enum
@@ -14,7 +14,7 @@ class Connector(Interface):
     BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
                   "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
 
-    def __init__(self, link_id: str | int, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
+    def __init__(self, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
                  mtu: int = 1500, duplex: str = "auto") -> None:
 
         if duplex not in ["auto", "full", "half"]:
@@ -22,14 +22,14 @@ class Connector(Interface):
 
         super().__init__(int_type, port, cidr)
 
-        self.shutdown = True
+        self.__shutdown = True
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
         self.duplex = duplex
 
         # Used when a connection is established, otherwise
         self.destination_device = None
-        self.link_id = None  # Connector ID, aka SCR in F@H for routers
+        self.destination_port = None  # Connector ID, aka SCR in F@H for routers
 
     # Check if the interface type is actually a connector (e.g. Ethernet)
     def validate_port(self) -> None:
@@ -72,22 +72,22 @@ class Connector(Interface):
             print(f"{Fore.MAGENTA}DENIED: Dangling connector, so it remains shut{Style.RESET_ALL}")
             return []
         else:
-            self.shutdown = shutdown
-            shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
+            self.__shutdown = shutdown
+            shutdown_cmd = "shutdown" if self.__shutdown else "no shutdown"
             return [
                 f"interface {self.int_type}{self.port}",
                 shutdown_cmd,
                 "exit"
             ]
 
-    def connect_to(self, link_id: int | str, node: Any) -> List[str]:
-        self.destination_device = node
-        self.link_id = link_id
+    def connect_to(self, destination_port: int | str, device: Any) -> List[str]:
+        self.destination_device = device
+        self.destination_port = destination_port
         return self.set_shutdown(False)
     
     def disconnect(self) -> List[str]:
         self.destination_device = None
-        self.link_id = None
+        self.destination_port = None
         return self.set_shutdown(True)
 
     def __eq__(self, other):
