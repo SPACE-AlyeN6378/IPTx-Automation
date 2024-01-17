@@ -22,7 +22,7 @@ class Connector(Interface):
 
         super().__init__(int_type, port, cidr)
 
-        self.__shutdown = True
+        self.shutdown = True
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
         self.duplex = duplex
@@ -72,23 +72,21 @@ class Connector(Interface):
             print(f"{Fore.MAGENTA}DENIED: Dangling connector, so it remains shut{Style.RESET_ALL}")
             return []
         else:
-            self.__shutdown = shutdown
-            shutdown_cmd = "shutdown" if self.__shutdown else "no shutdown"
+            self.shutdown = shutdown
+            shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
             return [
                 f"interface {self.int_type}{self.port}",
                 shutdown_cmd,
                 "exit"
             ]
 
-    def connect_to(self, destination_port: int | str, device: Any) -> List[str]:
+    def connect_to(self, device: Any, destination_port: int | str) -> None:
         self.destination_device = device
         self.destination_port = destination_port
-        return self.set_shutdown(False)
     
-    def disconnect(self) -> List[str]:
+    def disconnect(self) -> None:
         self.destination_device = None
         self.destination_port = None
-        return self.set_shutdown(True)
 
     def __eq__(self, other):
         if isinstance(other, Connector):
