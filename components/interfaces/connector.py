@@ -22,14 +22,21 @@ class Connector(Interface):
 
         super().__init__(int_type, port, cidr)
 
-        self.shutdown = True
+        self.shutdown_state = True 
         self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
         self.mtu = mtu
         self.duplex = duplex
 
         # Used when a connection is established, otherwise
-        self.destination_device = None
-        self.destination_port = None  # Connector ID, aka SCR in F@H for routers
+        self.destination_device = None      # Connector ID, aka SCR in F@H for router-to-router
+        self.destination_port = None
+
+        self._changes_made["shutdown"] = True
+        self._changes_made["bandwidth"] = True
+        self._changes_made["mtu"] = True
+        self._changes_made["duplex"] = True
+
+
 
     # Check if the interface type is actually a connector (e.g. Ethernet)
     def validate_port(self) -> None:
@@ -44,49 +51,50 @@ class Connector(Interface):
 
     def config(self, cidr: str = None, bandwidth: int = None, mtu: int = None,
                duplex: str = None):
-        ios_commands = super().config(cidr)
-        exit_ = ios_commands.pop()
-
-        ios_commands.append("shutdown")
+        super().config(cidr)
 
         if mtu:
             self.mtu = mtu
-            ios_commands.append(f"mtu {self.mtu}")
+            self._changes_made["mtu"] = True
 
         if bandwidth:
             self.bandwidth = bandwidth
-            ios_commands.append(f"bandwidth {self.bandwidth}")
+            self._changes_made["bandwidth"] = True
 
         if duplex:
             if duplex not in ["auto", "full", "half"]:
                 raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
             
             self.duplex = duplex
-            ios_commands.append(f"duplex {self.duplex}")
+            self._changes_made["duplex"] = True
 
-        ios_commands.append(exit_)
-        return ios_commands
-    
-    def set_shutdown(self, shutdown: bool = True) -> List[str]:
-        if not shutdown and not self.destination_device:
-            print(f"{Fore.MAGENTA}DENIED: Dangling connector, so it remains shut{Style.RESET_ALL}")
-            return []
+    def shutdown(self) -> None:
+        if self.shutdown_state:
+            print(f"{Fore.MAGENTA}DENIED: This connector is already shut down.{Style.RESET_ALL}")
         else:
-            self.shutdown = shutdown
-            shutdown_cmd = "shutdown" if self.shutdown else "no shutdown"
-            return [
-                f"interface {self.int_type}{self.port}",
-                shutdown_cmd,
-                "exit"
-            ]
+            self.shutdown_state = True
+            self._changes_made["shutdown"] = True
 
+    def release(self) -> None:
+        if not self.shutdown_state:
+            print(f"{Fore.MAGENTA}DENIED: This connector has already opened.{Style.RESET_ALL}")
+        else:
+            if not self.destination_device:
+                print(f"{Fore.MAGENTA}DENIED: Dangling connector or not connected, so it remains shut{Style.RESET_ALL}")
+
+            else:
+                self.shutdown_state = False
+                self._changes_made["shutdown"] = True
+            
     def connect_to(self, device: Any, destination_port: int | str) -> None:
         self.destination_device = device
         self.destination_port = destination_port
+        self.release()
     
     def disconnect(self) -> None:
         self.destination_device = None
         self.destination_port = None
+        self.shutdown()
 
     def __eq__(self, other):
         if isinstance(other, Connector):
@@ -100,3 +108,35 @@ class Connector(Interface):
                 and self.destination_device == other.destination_device
 
         return False
+    
+    # Generates a block of commands
+    def get_command_block(self):
+        ios_commands = [f"interface {self.__str__()}"]
+        
+        for attr in self._changes_made.keys():
+            if self._changes_made[attr]:
+                if attr == "shutdown":
+                    no = "" if self.shutdown_state else "no "
+                    ios_commands.append(f"{no}shutdown")
+
+                elif attr == "ip address":
+                    ios_commands.append(f"{attr} {self.ip_address} {self.subnet_mask}")
+
+                elif attr == "bandwidth":
+                    ios_commands.append(f"{attr} {self.bandwidth}")
+
+                elif attr == "mtu":
+                    ios_commands.append(f"{attr} {self.mtu}")
+
+                elif attr == "duplex":
+                    ios_commands.append(f"{attr} {self.duplex}")
+                    
+                self._changes_made[attr] = False
+
+        if len(ios_commands) > 1:
+            ios_commands.append("exit")
+            return ios_commands
+        
+        return []
+
+

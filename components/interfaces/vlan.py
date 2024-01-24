@@ -42,6 +42,7 @@ class VLAN:
         ios_commands.append("exit")
 
         if cidr:
-            ios_commands.extend(self.interface.config(cidr=cidr))
+            self.interface.config(cidr=cidr)
+            ios_commands.extend(self.interface.get_command_block())
 
         return ios_commands

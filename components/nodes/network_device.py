@@ -1,24 +1,38 @@
 from __future__ import annotations
 
-from typing import List, Tuple, Any
+from typing import List, Iterable
 from components.interfaces.interface_list import InterfaceList, Connector
 from components.interfaces.interface import Interface
 from components.interfaces.loopback import Loopback
 from components.nodes.notfound_error import NotFoundError
 from colorama import Style, Fore
+import re
 import pyperclip
 
 
 class NetworkDevice:
 
-    def __init__(self, node_id: str | int, hostname: str = "Node", x: int = 0, y: int = 0,
-                 interfaces: List[Interface] | Tuple[Interface] = None) -> None:
+    hostname_pattern = r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$"
+    hostname_regex = re.compile(hostname_pattern)
 
-        self.device_id = node_id
+    @staticmethod
+    def print_script(commands: Iterable[str], color = Fore.WHITE):
+        for command in commands:
+            print(f"{color}{command}{Style.RESET_ALL}")
+
+    # Constructor
+    def __init__(self, node_id: str | int, hostname: str = "Node", x: int = 0, y: int = 0,
+                 interfaces: Iterable[Interface] = None) -> None:
+        
+        if not NetworkDevice.hostname_regex.match(hostname):
+            raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
+
+        self.__device_id = node_id
         self.hostname = hostname
         self.x = x
         self.y = y
-        self.script = ["configure terminal", f"hostname {hostname}", "end\n"]
+
+        self._changes_made = {"hostname": True}
 
         if interfaces is None:
             interfaces = []
@@ -26,25 +40,31 @@ class NetworkDevice:
         self.interfaces = InterfaceList()
         self.add_int(*interfaces)
 
+    # Couple of operators
     def __str__(self):
         interfaces_qty = len(self.interfaces)
         return f"<Device {self.hostname} with {interfaces_qty} interface(s)>"
 
     def __eq__(self, other):
         if isinstance(other, NetworkDevice):
-            return self.device_id == other.device_id \
+            return self.__device_id == other.__device_id \
                 and self.hostname == other.hostname \
                 and (self.x, self.y) == (other.x, other.y)
 
+    # Sends Cisco command to script
     def _to_script(self, *commands: str):
         end_ = self.script.pop()
         self.script.extend(list(commands))
         self.script.append(end_)
-
-    def get_int(self, port: str) -> Interface:  # Get interface
+    
+    def __getitem__(self, port: str) -> Connector | Loopback:
         return self.interfaces[port]
 
-    def get_ints(self, *ports: str) -> List[Interface]:
+    # Getters
+    def get_int(self, port: str) -> Connector | Loopback:  # Get interface
+        return self.interfaces[port]
+
+    def get_ints(self, *ports: str) -> List[Connector | Loopback]:
         result = [self.interfaces[port] for port in ports]
         if any(interface is None for interface in result):
             raise NotFoundError(f"ERROR: One of the interfaces is not included in "
@@ -52,7 +72,7 @@ class NetworkDevice:
 
         return result
 
-    def get_loopback(self, loopback_id: int):
+    def get_loopback(self, loopback_id: int) -> Loopback:
         return self.interfaces[f"L{loopback_id}"]
 
     def get_destination_device(self, port):
@@ -70,9 +90,13 @@ class NetworkDevice:
 
         return destination_port
 
+    # Setters
     def set_hostname(self, hostname: str):
+
+        if not NetworkDevice.hostname_regex.match(hostname):
+            raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
+        
         self.hostname = hostname
-        self._to_script(f"hostname {hostname}")
 
     def set_position(self, x: int = None, y: int = None):
         if x:
@@ -80,55 +104,17 @@ class NetworkDevice:
         if y:
             self.y = y
 
+    def shutdown(self, port: str) -> None:
+        self.get_int(port).shutdown()
+
+    def release(self, port: str) -> None:
+        self.get_int(port).release()
+
     def add_int(self, *interfaces: Connector | Loopback) -> None:
         self.interfaces.push(*interfaces)
 
-        for interface in interfaces:
-            if isinstance(interface, Connector):
-                self._to_script(
-                    *interface.config(bandwidth=interface.bandwidth, mtu=interface.mtu, duplex=interface.duplex)
-                )
-            else:
-                self._to_script(
-                    *interface.config()
-                )
-
-    def move_int(self, interface: str | Interface) -> Interface:
+    def remove_int(self, interface: str | Connector | Loopback) -> Connector | Loopback:
         return self.interfaces.pop(interface)
-
-    def shutdown(self, port):
-        ios_commands = self.interfaces[port].set_shutdown(True)
-
-        if ios_commands:
-            if f"interface {self.get_int(port).int_type}{port}" in self.script:
-
-                index = self.script.index(f"interface {self.get_int(port).int_type}{port}") + 1
-                while self.script[index] != "exit":
-                    if self.script[index] == "no shutdown":
-                        self.script[index] = "shutdown"
-                        break
-
-                    index += 1
-
-            else:
-                self._to_script(*ios_commands)
-
-    def release(self, port):
-        ios_commands = self.interfaces[port].set_shutdown(False)
-
-        if ios_commands:
-            if f"interface {self.get_int(port).int_type}{port}" in self.script:
-
-                index = self.script.index(f"interface {self.get_int(port).int_type}{port}") + 1
-                while self.script[index] != "exit":
-                    if self.script[index] == "shutdown":
-                        self.script[index] = "no shutdown"
-                        break
-
-                    index += 1
-
-            else:
-                self._to_script(*ios_commands)
 
     def connect(self, port: str, destination_device: NetworkDevice, destination_port: int | str = None):
         if not isinstance(destination_device, NetworkDevice):
@@ -143,18 +129,23 @@ class NetworkDevice:
             else:
                 raise TypeError(f"ERROR: The interface at port '{port}' is not a connector")
 
-        # Incorporate the 'no shutdown' command into the script
         self.interfaces[port].connect_to(destination_device, destination_port)
-        self.release(port)
 
     def disconnect(self, port: str):
-        self.shutdown(port)
         self.interfaces[port].disconnect()
 
-    def send_script(self):
-        for command in self.script:
-            print(f"{Fore.GREEN}{command}{Style.RESET_ALL}")
+    def submit_script(self) -> List[str]:
+        script = ["configure terminal"]
 
-        pyperclip.copy("\n".join(self.script))  # This will be replaced with netmiko soon
+        if self._changes_made["hostname"]:
+            script.append(f"hostname {self.hostname}")
+            self._changes_made["hostname"] = False
+        
+        for interface in self.interfaces:
+            script.extend(interface.get_command_block())
+
+        script.append("end")
+
+        return script
 
         # self.script = ["configure terminal", "end"]

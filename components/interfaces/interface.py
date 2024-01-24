@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Iterable
 
 
 class Interface:
@@ -78,7 +78,7 @@ class Interface:
 
     # Get interface range
     @staticmethod
-    def range_(prefix: str | int, numbers: list | tuple | range):
+    def range(prefix: str | int, numbers: Iterable[int]):
         if not isinstance(prefix, (str, int)):
             raise TypeError("Please use format x/x/... or positive integers")
 
@@ -98,10 +98,13 @@ class Interface:
         self.port = port
         self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
         self.validate_port()
+        self._changes_made = {
+            "ip address": self.ip_address is not None
+        }
 
     # Some operator overloadings
     def __str__(self):
-        if self.int_type in ("Loopback", "Tunnel", "VLAN"):
+        if self.int_type in ("Tunnel", "VLAN"):
             return f"{self.int_type} {self.port}"
         else:
             return f"{self.int_type}{self.port}"
@@ -116,25 +119,19 @@ class Interface:
     def __contains__(self, item):
         return self.int_type == item.int_type and self.port == item.port \
                and self.ip_address == item.ip_address and self.subnet_mask == item.subnet_mask
+    
+    def _add_to_block(self, *commands: str):
+        exit_ = self.__command_block.pop() 
+        self.__command_block.extend(commands)
+        self.__command_block.append(exit_)
 
     # Configure the interface and generate Cisco command to be sent
     def config(self, cidr: str = None) -> List[str]:
         # Change a couple of attributes
         if cidr:
-            self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
+            self.ip_address, self.subnet_mask = Interface.get_ip_and_subnet(cidr)
 
-        # Generate cisco command
-        ios_commands = []
-        if self.int_type in ("Tunnel", "VLAN"):
-            ios_commands.append(f"interface {self.int_type} {self.port}")
-        else:
-            ios_commands.append(f"interface {self.int_type}{self.port}")
-
-        if self.ip_address and self.subnet_mask:
-            ios_commands.append(f"ip address {self.ip_address} {self.subnet_mask}")
-
-        ios_commands.append("exit")
-        return ios_commands
+        self._changes_made["ip address"] = self.ip_address is not None and self.subnet_mask is not None
     
     # Network Address
     def network_address(self):
@@ -150,8 +147,22 @@ class Interface:
         return wildcard_mask
 
     # Generate Cisco command to advertise OSPF route
-    def ospf_advertise(self, area=0):
-        if self.ip_address and self.subnet_mask:
-            return [f"network {self.network_address()} {self.wildcard_mask()} area {area}"]
-        else:
-            raise NotImplementedError("The IP address and subnet mask are missing")
+    # Goes to router interface
+    # def ospf_advertise(self, area=0):
+    #     if self.ip_address and self.subnet_mask:
+    #         return [f"network {self.network_address()} {self.wildcard_mask()} area {area}"]
+    #     else:
+    #         raise NotImplementedError("The IP address and subnet mask are missing")
+
+    # Generates a block of commands
+    def get_command_block(self):
+        ios_commands = [f"interface {self.__str__()}"]
+        if self._changes_made["ip address"]:
+            ios_commands.append(f"ip address {self.ip_address} {self.subnet_mask}")
+            self._changes_made["ip address"] = False
+
+        if len(ios_commands) > 1:
+            ios_commands.append("exit")
+            return ios_commands
+        
+        return []
