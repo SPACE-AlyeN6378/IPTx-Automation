@@ -36,8 +36,6 @@ class Connector(Interface):
         self._changes_made["mtu"] = True
         self._changes_made["duplex"] = True
 
-
-
     # Check if the interface type is actually a connector (e.g. Ethernet)
     def validate_port(self) -> None:
         super().validate_port()

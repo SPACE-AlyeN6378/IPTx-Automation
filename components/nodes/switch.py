@@ -15,11 +15,12 @@ from list_helper import merge_list
 class SwitchMode(Enum):  # ENUM for switchport modes
     ACCESS = 1
     TRUNK = 2
+    DOT1Q_TUNNEL = 3
 
 
 class ECNProtocol(Enum):
-    PAGP = 3
-    LACP = 4
+    PAGP = 4
+    LACP = 5
 
 
 class SwitchInterface(Connector):
@@ -39,7 +40,6 @@ class SwitchInterface(Connector):
         # Switchport command
         self.__switchport_cmd = []
         self.__channel_group_cmd = ""
-
 
     # VLAN Functions
     def __access_command(self) -> None:
@@ -130,7 +130,19 @@ class SwitchInterface(Connector):
             raise ConnectionError("This connector is not in switchport trunk mode")
 
         self.__switchport_cmd.append(f"switchport trunk allowed vlan remove {vlan_id}")
-       
+
+    def __dot1q_tunnel_command(self):
+        ios_commands = [
+            f"switchport access vlan {list(self.vlan_ids)[0]}",
+            "switchport mode dot1q-tunnel"
+        ]
+
+        if self.dtp_enabled:
+            ios_commands.append("switchport nonegotiate")
+            self.dtp_enabled = False
+
+        self.__switchport_cmd.extend(ios_commands)
+
     # These VLAN assignment functions will be used outside the class structure ===================================
     def assign_vlan(self, *vlan_ids: int) -> None:
 
@@ -150,7 +162,7 @@ class SwitchInterface(Connector):
         else:
             self.__access_command()
 
-    def replace_vlan(self, *vlan_ids: int) -> List[str]:
+    def replace_vlan(self, *vlan_ids: int) -> None:
         # No empty parameters
         if not vlan_ids:
             raise ValueError("Missing parameters for VLAN IDs")
@@ -165,7 +177,7 @@ class SwitchInterface(Connector):
         else:
             self.__access_command()
 
-    def remove_vlan(self, vlan_id: int) -> List[str]:
+    def remove_vlan(self, vlan_id: int) -> None:
 
         if not isinstance(vlan_id, int):
             raise TypeError("VLAN ID must be an integer")
@@ -187,7 +199,11 @@ class SwitchInterface(Connector):
     def default_trunk(self):
         self.__switchport_mode = None
         self.vlan_ids.clear()
-        return self.__trunk_add_command()
+        self.__trunk_add_command()
+
+    def dot1q_tunnel(self, vlan_id: int):
+        self.vlan_ids = {vlan_id}
+        self.__switchport_mode = SwitchMode.DOT1Q_TUNNEL
 
     # Check if establishing ether-channels fulfills the required criteria
     def etherchannel_check(self, other):
@@ -262,7 +278,6 @@ class SwitchInterface(Connector):
         if self.__channel_group_cmd:
             self.__switchport_cmd.append(self.__channel_group_cmd)
 
-
         if self.__switchport_cmd:
             if not commands:
                 commands.append(f"interface {self.__str__()}")
@@ -273,7 +288,6 @@ class SwitchInterface(Connector):
                 exit_ = commands.pop()
                 commands.extend(self.__switchport_cmd)
                 commands.append(exit_)
-
 
         self.__channel_group_cmd = ""
         self.__switchport_cmd.clear()

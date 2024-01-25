@@ -79,7 +79,7 @@ class InterfaceList:
         return "[" + ", ".join(str(inf) for inf in self.connectors + self.loopbacks) + "]"
 
     # Adds a couple of interfaces to the list
-    def push(self, *args: Connector | Loopback) -> List[str]:
+    def push(self, *args: Connector | Loopback) -> None:
 
         if not all(isinstance(arg, (Connector, Loopback)) for arg in args):
             raise TypeError("All interfaces should be either a connector (e.g. GigabitEthernet) or a loopback")

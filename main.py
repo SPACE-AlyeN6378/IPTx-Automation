@@ -4,7 +4,6 @@ from components.interfaces.connector import Connector
 from components.interfaces.vlan import VLAN
 from components.nodes.network_device import NetworkDevice
 from components.nodes.switch import Switch, SwitchInterface, ECNProtocol
-from list_helper import range_
 
 
 def connect_devices(device1: NetworkDevice, device1_port: str, device2: NetworkDevice, device2_port: str):
@@ -43,6 +42,7 @@ connect_devices(switch1, "0/1", switch2, "0/3")
 switch1.set_default_trunk("0/0", "0/1")
 switch2.set_default_trunk("0/2", "0/3")
 
-switch1.create_etherchannel(["0/0", "0/1"], 1, protocol=ECNProtocol.LACP, unconditional=False)
+tr
+switch1.create_etherchannel(["0/0", "0/2"], 1, protocol=ECNProtocol.PAGP, unconditional=False)
 switch1.submit_script()
 # add_vlans(switch1)
