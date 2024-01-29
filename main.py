@@ -30,7 +30,9 @@ switch2 = Switch(
         SwitchInterface("GigabitEthernet", "0/0"),
         SwitchInterface("GigabitEthernet", "0/1"),
         SwitchInterface("GigabitEthernet", "0/2"),
-        SwitchInterface("GigabitEthernet", "0/3")
+        SwitchInterface("GigabitEthernet", "0/3"),
+        SwitchInterface("GigabitEthernet", "1/0"),
+        SwitchInterface("GigabitEthernet", "1/1"),
     ],
     vlan_ids={2, 3, 4, 5}
 )
@@ -38,11 +40,27 @@ switch2 = Switch(
 
 connect_devices(switch1, "0/0", switch2, "0/2")
 connect_devices(switch1, "0/1", switch2, "0/3")
+connect_devices(switch1, "0/2", switch2, "1/0")
+connect_devices(switch1, "0/3", switch2, "1/1")
 
-switch1.set_default_trunk("0/0", "0/1")
-switch2.set_default_trunk("0/2", "0/3")
+# switch1.assign_vlans(2, ports="0/0")
+# switch1.assign_vlans(2, ports="0/1")
 
-tr
-switch1.create_etherchannel(["0/0", "0/2"], 1, protocol=ECNProtocol.PAGP, unconditional=False)
-switch1.submit_script()
-# add_vlans(switch1)
+switch1.send_script(print_to_console=False)
+switch1.etherchannel(["0/0", "0/1"], 1, ECNProtocol.LACP, True)
+switch1.send_script()
+
+switch1.etherchannel(switch1.port_channels[1], 3, ECNProtocol.PAGP, False)
+
+print('\n')
+switch1.send_script()
+print(switch1.port_channels)
+
+switch1.etherchannel(["0/2", "0/3"], 3, ECNProtocol.PAGP, False)
+
+print('\n')
+switch1.send_script()
+
+print(switch1.port_channels)
+
+

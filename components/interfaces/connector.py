@@ -28,8 +28,8 @@ class Connector(Interface):
         self.duplex = duplex
 
         # Used when a connection is established, otherwise
-        self.destination_device = None      # Connector ID, aka SCR in F@H for router-to-router
-        self.destination_port = None
+        self.remote_device = None      # Connector ID, aka SCR in F@H for router-to-router
+        self.remote_port = None
 
         self._changes_made["shutdown"] = True
         self._changes_made["bandwidth"] = True
@@ -77,21 +77,21 @@ class Connector(Interface):
         if not self.shutdown_state:
             print(f"{Fore.MAGENTA}DENIED: This connector has already opened.{Style.RESET_ALL}")
         else:
-            if not self.destination_device:
+            if not self.remote_device:
                 print(f"{Fore.MAGENTA}DENIED: Dangling connector or not connected, so it remains shut{Style.RESET_ALL}")
 
             else:
                 self.shutdown_state = False
                 self._changes_made["shutdown"] = True
             
-    def connect_to(self, device: Any, destination_port: int | str) -> None:
-        self.destination_device = device
-        self.destination_port = destination_port
+    def connect_to(self, device: Any, remote_port: int | str) -> None:
+        self.remote_device = device
+        self.remote_port = remote_port
         self.release()
     
     def disconnect(self) -> None:
-        self.destination_device = None
-        self.destination_port = None
+        self.remote_device = None
+        self.remote_port = None
         self.shutdown()
 
     def __eq__(self, other):
@@ -103,7 +103,7 @@ class Connector(Interface):
                 and self.bandwidth == other.bandwidth \
                 and self.mtu == other.mtu \
                 and self.duplex == other.duplex \
-                and self.destination_device == other.destination_device
+                and self.remote_device == other.destination_device
 
         return False
     

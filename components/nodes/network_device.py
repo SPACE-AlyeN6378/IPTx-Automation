@@ -75,20 +75,20 @@ class NetworkDevice:
     def get_loopback(self, loopback_id: int) -> Loopback:
         return self.interfaces[f"L{loopback_id}"]
 
-    def get_destination_device(self, port):
-        device = self.get_int(port).destination_device
+    def get_remote_device(self, port):
+        device = self.get_int(port).remote_device
         if device is None:
-            print(f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no destination device{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
 
         return device
 
-    def get_destination_port(self, port):
-        destination_port = self.get_int(port).destination_port
-        if destination_port is None:
+    def get_remote_port(self, port):
+        remote_port = self.get_int(port).remote_port
+        if remote_port is None:
             print(
-                f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no destination device{Style.RESET_ALL}")
+                f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
 
-        return destination_port
+        return remote_port
 
     # Setters
     def set_hostname(self, hostname: str):
@@ -116,11 +116,11 @@ class NetworkDevice:
     def remove_int(self, interface: str | Connector | Loopback) -> Connector | Loopback:
         return self.interfaces.pop(interface)
 
-    def connect(self, port: str, destination_device: NetworkDevice, destination_port: int | str = None):
-        if not isinstance(destination_device, NetworkDevice):
-            raise TypeError(f"ERROR: This is not a networking device: {str(destination_device)}")
+    def connect(self, port: str, remote_device: NetworkDevice, remote_port: int | str = None):
+        if not isinstance(remote_device, NetworkDevice):
+            raise TypeError(f"ERROR: This is not a networking device: {str(remote_device)}")
 
-        if destination_device == self:
+        if remote_device == self:
             raise ConnectionError(f"ERROR: Cannot connect interface to itself")
 
         if not isinstance(self.interfaces[port], Connector):
@@ -129,12 +129,12 @@ class NetworkDevice:
             else:
                 raise TypeError(f"ERROR: The interface at port '{port}' is not a connector")
 
-        self.interfaces[port].connect_to(destination_device, destination_port)
+        self.interfaces[port].connect_to(remote_device, remote_port)
 
     def disconnect(self, port: str):
         self.interfaces[port].disconnect()
 
-    def submit_script(self) -> List[str]:
+    def send_script(self) -> List[str]:
         script = ["configure terminal"]
 
         if self._changes_made["hostname"]:

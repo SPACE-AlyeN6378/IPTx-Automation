@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List
 from components.interfaces.connector import Connector
 from components.interfaces.loopback import Loopback
-from network_error import NetworkError
+from iptx_errors import NetworkError
 
 
 class InterfaceList:
