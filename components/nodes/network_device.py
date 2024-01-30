@@ -7,7 +7,7 @@ from components.interfaces.loopback import Loopback
 from components.nodes.notfound_error import NotFoundError
 from colorama import Style, Fore
 import re
-import pyperclip
+# import pyperclip
 
 
 class NetworkDevice:
@@ -22,7 +22,7 @@ class NetworkDevice:
 
     # Constructor
     def __init__(self, node_id: str | int, hostname: str = "Node", x: int = 0, y: int = 0,
-                 interfaces: Iterable[Interface] = None) -> None:
+                 interfaces: Iterable[Connector] = None) -> None:
         
         if not NetworkDevice.hostname_regex.match(hostname):
             raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
@@ -31,7 +31,6 @@ class NetworkDevice:
         self.hostname = hostname
         self.x = x
         self.y = y
-
         self._changes_made = {"hostname": True}
 
         if interfaces is None:
@@ -42,29 +41,25 @@ class NetworkDevice:
 
     # Couple of operators
     def __str__(self):
-        interfaces_qty = len(self.interfaces)
-        return f"<Device {self.hostname} with {interfaces_qty} interface(s)>"
+        return f"Device {self.hostname}"
 
     def __eq__(self, other):
         if isinstance(other, NetworkDevice):
             return self.__device_id == other.__device_id \
-                and self.hostname == other.hostname \
-                and (self.x, self.y) == (other.x, other.y)
+                and self.hostname == other.hostname
+
+    def __hash__(self):
+        return hash((self.__device_id, self.hostname))
 
     # Sends Cisco command to script
-    def _to_script(self, *commands: str):
-        end_ = self.script.pop()
-        self.script.extend(list(commands))
-        self.script.append(end_)
-    
-    def __getitem__(self, port: str) -> Connector | Loopback:
+    def __getitem__(self, port: str) -> Connector:
         return self.interfaces[port]
 
     # Getters
-    def get_int(self, port: str) -> Connector | Loopback:  # Get interface
+    def get_int(self, port: str) -> Connector:  # Get interface
         return self.interfaces[port]
 
-    def get_ints(self, *ports: str) -> List[Connector | Loopback]:
+    def get_ints(self, *ports: str) -> List[Connector]:
         result = [self.interfaces[port] for port in ports]
         if any(interface is None for interface in result):
             raise NotFoundError(f"ERROR: One of the interfaces is not included in "
@@ -72,8 +67,8 @@ class NetworkDevice:
 
         return result
 
-    def get_loopback(self, loopback_id: int) -> Loopback:
-        return self.interfaces[f"L{loopback_id}"]
+    # def get_loopback(self, loopback_id: int) -> Loopback:
+    #     return self.interfaces[f"L{loopback_id}"]
 
     def get_remote_device(self, port):
         device = self.get_int(port).remote_device

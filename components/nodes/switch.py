@@ -1,16 +1,15 @@
 from __future__ import annotations
-
 from components.nodes.network_device import NetworkDevice
 from components.interfaces.vlan import VLAN
 from components.nodes.notfound_error import NotFoundError
-from typing import List, Union, Set, Tuple, Iterable
+from typing import Union, Set, Iterable, List
 from enum import Enum
 from colorama import Fore, Style
-from iptx_errors import SwitchportError
+from iptx_utils import SwitchportError
 
 from components.interfaces.connector import Connector
 
-from list_helper import merge_list, list_to_str, replace_key
+from list_helper import list_to_str, replace_key
 
 
 class Mode(Enum):  # ENUM for switchport modes
@@ -43,16 +42,18 @@ class SwitchInterface(Connector):
         self.__channel_group_cmd = []
 
     def set_vlans(self, mode: Mode.ACCESS | Mode.TRUNK | Mode.DOT1Q_TUNNEL = None,
-                                vlan_ids: int | Iterable[int] = None,
-                                replace: bool = False):
-        
+                  vlan_ids: int | Iterable[int] = None,
+                  replace: bool = False):
+
         # Set switchport mode
         if mode:
             if mode not in [Mode.ACCESS, Mode.TRUNK, Mode.DOT1Q_TUNNEL]:
-                raise SwitchportError(f"ERROR: Unacceptable switchport '{mode}'. Accepted switchport modes are ACCESS, TRUNK, and DOT1Q_TUNNEL")
-            
+                raise SwitchportError(
+                    f"ERROR: Unacceptable switchport '{mode}'. Accepted switchport modes are "
+                    f"ACCESS, TRUNK, and DOT1Q_TUNNEL")
+
             self.__switchport_mode = mode
-            
+
             if self.__switchport_mode == Mode.ACCESS:
                 self.__switchport_cmd.append("switchport mode access")
             elif self.__switchport_mode == Mode.TRUNK:
@@ -64,7 +65,7 @@ class SwitchInterface(Connector):
         if vlan_ids:
             if not self.__switchport_mode:
                 raise SwitchportError("ERROR: The switchport mode is neither in ACCESS, TRUNK nor DOT1Q_TUNNEL")
-            
+
             if not isinstance(vlan_ids, Iterable):
                 vlan_ids = [vlan_ids]
 
@@ -72,13 +73,13 @@ class SwitchInterface(Connector):
                 self.vlan_ids = set(vlan_ids)
             else:
                 self.vlan_ids = self.vlan_ids | set(vlan_ids)
-        
+
         # Generate commands
         if self.__switchport_mode in {Mode.ACCESS, Mode.DOT1Q_TUNNEL}:
             # When more than one VLANs are contained
             if len(self.vlan_ids) > 1:
-                print(f"{Fore.YELLOW}WARNING: There are more than one VLAN IDs in " 
-                        f"interface {str(self)} '{str(self.vlan_ids)}'.")
+                print(f"{Fore.YELLOW}WARNING: There are more than one VLAN IDs in "
+                      f"interface {str(self)} '{str(self.vlan_ids)}'.")
 
                 if vlan_ids:
                     print(f"Using VLAN {vlan_ids[0]} in the parameter...{Style.RESET_ALL}")
@@ -109,8 +110,10 @@ class SwitchInterface(Connector):
     def reset_switchport(self):
 
         if self.port_channel != 0:
-            raise SwitchportError(f"ERROR in {str(self)}: Configured as etherchannel, so cannot reset switchport.\nPlease remove etherchannel first.")
-        
+            raise SwitchportError(
+                f"ERROR in {str(self)}: Configured as etherchannel, so cannot reset switchport.\n"
+                f"Please remove etherchannel first.")
+
         if self.__switchport_mode == Mode.ACCESS:
             self.__switchport_cmd.extend([
                 "no switchport mode access",
@@ -136,10 +139,10 @@ class SwitchInterface(Connector):
     # Configure switchport as trunk for all VLANs 1-4094
     def trunk_default(self):
         self.reset_switchport()
-        self.set_vlans(mode=Mode.TRUNK);
+        self.set_vlans(mode=Mode.TRUNK)
 
     # Check if establishing ether-channels fulfills the required criteria
-    def etherchannel_check(self, other):
+    def etherchannel_check(self, other: SwitchInterface):
         # Must be a switch interface
         if not isinstance(other, SwitchInterface):
             raise TypeError(f"ERROR: Only accepts type SwitchInterface()")
@@ -157,7 +160,9 @@ class SwitchInterface(Connector):
             raise ValueError(f"ERROR: Mismatching Duplex")
         # Unused port channels
         elif self.port_channel != other.port_channel:
-            raise ConnectionError(f"ERROR in {str(self)}: The other interface is configured with another port channel, {other.port_channel}")
+            raise ConnectionError(
+                f"ERROR in {str(self)}: The other interface is configured "
+                f"with another port channel, {other.port_channel}")
         # Switchport
         elif self.__switchport_mode != other.__switchport_mode:
             raise ValueError(f"ERROR: Mismatching switchport modes")
@@ -167,11 +172,10 @@ class SwitchInterface(Connector):
         # Same remote device
         elif self.remote_device != other.remote_device:
             raise ConnectionError(f"ERROR: Not connected to the same device")
-    
+
     @staticmethod
     def generate_eth_cmd(port_channel_num, protocol, unconditional):
         # Generate cisco command
-        protocol_keyword = ""
         if protocol == ECNProtocol.LACP:
             protocol_keyword = "active" if unconditional else "passive"
 
@@ -194,10 +198,11 @@ class SwitchInterface(Connector):
 
         if not isinstance(self.remote_device, Switch):
             raise TypeError(f"ERROR in {str(self)}: Ether-channels only supports switches in this backbone network")
-        
+
         if protocol not in [ECNProtocol.LACP, ECNProtocol.PAGP, None]:
-            raise ValueError(f"ERROR in {str(self)}: Incorrect protocols. Ether-channels either use PAgP, LACP, or None")
-        
+            raise ValueError(
+                f"ERROR in {str(self)}: Incorrect protocols. Ether-channels either use PAgP, LACP, or None")
+
         if not self.__switchport_mode:
             self.trunk_default()
 
@@ -211,23 +216,13 @@ class SwitchInterface(Connector):
         if unconditional is not None:
             self.unconditional = unconditional
 
-        # Generate cisco command
-        protocol_keyword = ""
-        if self.ecn_protocol == ECNProtocol.LACP:
-            protocol_keyword = "active" if self.unconditional else "passive"
-
-        elif self.ecn_protocol == ECNProtocol.PAGP:
-            protocol_keyword = "desirable" if self.unconditional else "auto"
-
-        else:
-            protocol_keyword = "on"
-
-        self.__channel_group_cmd.append(SwitchInterface.generate_eth_cmd(self.port_channel, self.ecn_protocol, self.unconditional))
+        self.__channel_group_cmd.append(
+            SwitchInterface.generate_eth_cmd(self.port_channel, self.ecn_protocol, self.unconditional))
 
     def remove_etherchannel(self):
         if not self.port_channel:
             raise SwitchportError(f"ERROR in {str(self)}: Etherchannel not configured yet")
-        
+
         self.__channel_group_cmd.append(f"no channel-group {self.port_channel}")
         self.port_channel = 0
         self.ecn_protocol = None
@@ -271,7 +266,7 @@ class Switch(NetworkDevice):
         if interfaces:
             if not all(isinstance(interface, SwitchInterface) for interface in interfaces):
                 raise TypeError("Switches only accept connectors of type SwitchInterface()")
-        
+
         self.vlan_config_cmds = []
         self.stp_config_cmds = []
         self.port_channel_cmds = []
@@ -285,7 +280,7 @@ class Switch(NetworkDevice):
             self.config_vlan(vlan_id)
 
     def __str__(self):
-        return super().__str__().replace("Device", "Switch")
+        return super().__str__().replace("Device", "SW")
 
     # VLAN Getter by ID
     def get_vlan(self, vlan_id: int) -> VLAN | None:
@@ -295,6 +290,13 @@ class Switch(NetworkDevice):
                 return vlan
 
         return None
+
+    def __getitem__(self, port: str) -> SwitchInterface:
+        return self.interfaces[port]
+
+    def get_ints(self, *ports: str) -> list[SwitchInterface]:
+        data: list[SwitchInterface] = [item for item in super().get_ints(*ports) if isinstance(item, SwitchInterface)]
+        return data
 
     def get_vlan_dict(self) -> dict:
         dictionary = dict()
@@ -319,14 +321,17 @@ class Switch(NetworkDevice):
             self.vlan_config_cmds.extend(self.vlans[len(self.vlans) - 1].config())
 
     # Assigns a VLAN into an interface
-    def assign_vlans(self, *vlan_ids: int, ports: str | Iterable[str] = None, trunking_only: bool = False, replace: bool = False) -> None:
+    def assign_vlans(self, *vlan_ids: int, ports: str | Iterable[str] = None, trunking_only: bool = False,
+                     replace: bool = False) -> None:
         # Check if one of those VLANs exist
         for vlan_id in vlan_ids:
             if not self.get_vlan(vlan_id):
                 raise NotFoundError(f"VLAN {vlan_id} not found")
 
         if not ports:
-            raise ValueError(f"ERROR in switch {self.hostname}: Missing parameter 'ports': Which of the ports should I assign the VLANs to?")
+            raise ValueError(
+                f"ERROR in switch {self.hostname}: Missing parameter 'ports': Which of the ports should I assign the "
+                f"VLANs to?")
 
         # If only one port is assigned, otherwise a list is given
         ports = [ports] if isinstance(ports, str) else ports
@@ -343,7 +348,9 @@ class Switch(NetworkDevice):
             raise NotFoundError(f"ERROR in switch {self.hostname}: VLAN {vlan_id} not found")
 
         if not ports:
-            raise ValueError(f"ERROR in switch {self.hostname}! Missing parameter 'ports': Which of the ports should I assign the VLANs to?")
+            raise ValueError(
+                f"ERROR in switch {self.hostname}! Missing parameter 'ports': Which of the ports should I assign the "
+                f"VLANs to?")
 
         ports = [ports] if isinstance(ports, str) else ports
 
@@ -386,13 +393,14 @@ class Switch(NetworkDevice):
                 self.stp_config_cmds.append(f"no spanning-tree vlan {vlan.vlan_id}")
 
     # Ether-channel =================================================================================
-    def etherchannel(self, ports: Iterable[str],
-                    port_channel_num: int = None,
-                    protocol: Union[ECNProtocol.ECN_LACP, ECNProtocol.ECN_PAGP] = None,
-                    unconditional: bool = None):
-        
+    def etherchannel(self, ports: List[str] | tuple[str],
+                     port_channel_num: int = None,
+                     protocol: Union[ECNProtocol.LACP, ECNProtocol.PAGP] = None,
+                     unconditional: bool = None):
+
         if len(ports) <= 1:
-            raise ConnectionRefusedError(f"ERROR in switch {self.hostname}: One is not enough for the etherchannel to be established")
+            raise ConnectionRefusedError(
+                f"ERROR in switch {self.hostname}: One is not enough for the etherchannel to be established")
 
         if ports in self.port_channels.values():
             self.etherchannel_config_cmds.extend([
@@ -408,7 +416,7 @@ class Switch(NetworkDevice):
 
         # Validation
         for interface in self.get_ints(*ports):
-            interface.etherchannel_check(self.get_int(ports[0]))
+            interface.etherchannel_check(self[ports[0]])
 
         # Configure the interfaces
         for interface in self.get_ints(*ports):
@@ -420,19 +428,15 @@ class Switch(NetworkDevice):
         self.etherchannel_config_cmds.extend([
             f"no interface Port-channel {port_channel_num}",
         ])
-        
+
         for interface in self.get_ints(*ports):
             interface.remove_etherchannel()
-        
-        
 
     # Send script to the actual switch =================================================================================
     def send_script(self, print_to_console: bool = True):
         script = super().send_script()
-        script.insert(1, self.vlan_config_cmds)
-        script.insert(2, self.stp_config_cmds)
-        script.insert(3, self.etherchannel_config_cmds)
-        merge_list(script)
+        more_commands = self.vlan_config_cmds + self.stp_config_cmds + self.etherchannel_config_cmds
+        script[1:1] = more_commands
 
         if print_to_console:
             NetworkDevice.print_script(commands=script, color=Fore.CYAN)
@@ -442,6 +446,3 @@ class Switch(NetworkDevice):
         self.stp_config_cmds.clear()
         self.etherchannel_config_cmds.clear()
         return script
-    
-
-
