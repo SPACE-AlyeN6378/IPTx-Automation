@@ -1,29 +1,38 @@
-from typing import Iterable
+from typing import Iterable, List
 
 import networkx as nx
 import matplotlib.pyplot as plt
 from components.nodes.switch import Switch, SwitchInterface
+from components.nodes.router import Router
 from iptx_utils import NetworkError
 
 
 # Define a simple class
 # Create an empty graph
 class Topology():
-    def __init__(self, as_number: int, devices: Iterable[Switch] = None):
+    def __init__(self, as_number: int, devices: Iterable[Switch | Router] = None):
         if devices is None:
             devices = []
 
         self.as_number = as_number
         self.__graph = nx.MultiGraph()
 
-    def add_devices(self, device: Switch) -> None:
+    def add_devices(self, device: Switch | Router) -> None:
         if self.__graph.has_node(device):
             raise NetworkError(f"ERROR in AS_NUM {self.as_number}: There's already a device with identical hostname. "
                                f"Please try a different name.")
 
         self.__graph.add_node(device)
 
-    def remove_device(self, device: Switch):
+    def remove_device(self, device: Switch | Router) -> None:
+        if not self.__graph.has_node(device):
+            raise NetworkError(f"ERROR in AS_NUM {self.as_number}: Device {device.hostname} not found in the topology, "
+                               f"so cannot be removed.")
+
+        self.__graph.remove_node(device)
+
+    def get_all_nodes(self) -> List[Switch | Router]:
+        return self.__graph.nodes()
 
 
 G = nx.MultiGraph()

@@ -21,7 +21,7 @@ class NetworkDevice:
             print(f"{color}{command}{Style.RESET_ALL}")
 
     # Constructor
-    def __init__(self, node_id: str | int, hostname: str = "Node", x: int = 0, y: int = 0,
+    def __init__(self, node_id: str | int = None, hostname: str = "Node", x: int = 0, y: int = 0,
                  interfaces: Iterable[Connector] = None) -> None:
         
         if not NetworkDevice.hostname_regex.match(hostname):
@@ -56,6 +56,9 @@ class NetworkDevice:
         return self.interfaces[port]
 
     # Getters
+    def get_id(self):
+        return self.__device_id
+
     def get_int(self, port: str) -> Connector:  # Get interface
         return self.interfaces[port]
 
