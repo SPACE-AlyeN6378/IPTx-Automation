@@ -257,7 +257,7 @@ class SwitchInterface(Connector):
 
 class Switch(NetworkDevice):
 
-    def __init__(self, node_id: str | int, hostname: str = "Switch", x: int = 0, y: int = 0,
+    def __init__(self, node_id: str | int = None, hostname: str = "Switch", x: int = 0, y: int = 0,
                  interfaces: Iterable[SwitchInterface] = None, vlan_ids: Set[int] = None):
 
         if vlan_ids is None:
@@ -343,7 +343,7 @@ class Switch(NetworkDevice):
                 interface.set_vlans(Mode.TRUNK, vlan_ids, replace)
 
     # Removes a VLAN from an interface
-    def deassign_vlan(self, vlan_id: int, ports: str | Iterable[str] = None) -> None:
+    def withdraw_vlan(self, vlan_id: int, ports: str | Iterable[str] = None) -> None:
         if not self.get_vlan(vlan_id):
             raise NotFoundError(f"ERROR in switch {self.hostname}: VLAN {vlan_id} not found")
 

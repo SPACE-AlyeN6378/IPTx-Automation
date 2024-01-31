@@ -21,7 +21,7 @@ class NetworkDevice:
             print(f"{color}{command}{Style.RESET_ALL}")
 
     # Constructor
-    def __init__(self, node_id: str | int = None, hostname: str = "Node", x: int = 0, y: int = 0,
+    def __init__(self, node_id: str | int = None, hostname: str = "NetworkDevice", x: int = 0, y: int = 0,
                  interfaces: Iterable[Connector] = None) -> None:
         
         if not NetworkDevice.hostname_regex.match(hostname):
@@ -89,7 +89,10 @@ class NetworkDevice:
         return remote_port
 
     # Setters
-    def set_hostname(self, hostname: str):
+    def update_id(self, new_id: int | str) -> None:
+        self.__device_id = new_id
+
+    def _set_hostname(self, hostname: str):
 
         if not NetworkDevice.hostname_regex.match(hostname):
             raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
@@ -114,7 +117,7 @@ class NetworkDevice:
     def remove_int(self, interface: str | Connector | Loopback) -> Connector | Loopback:
         return self.interfaces.pop(interface)
 
-    def connect(self, port: str, remote_device: NetworkDevice, remote_port: int | str = None):
+    def connect(self, port: str, remote_device: NetworkDevice, remote_port: int | str):
         if not isinstance(remote_device, NetworkDevice):
             raise TypeError(f"ERROR: This is not a networking device: {str(remote_device)}")
 
@@ -122,12 +125,18 @@ class NetworkDevice:
             raise ConnectionError(f"ERROR: Cannot connect interface to itself")
 
         if not isinstance(self.interfaces[port], Connector):
-            if self.interfaces[port] is None:
+            if self[port] is None:
                 raise TypeError(f"ERROR: The interface at port '{port}' does not exist")
             else:
                 raise TypeError(f"ERROR: The interface at port '{port}' is not a connector")
 
-        self.interfaces[port].connect_to(remote_device, remote_port)
+        if self[port].remote_device is not None:
+            raise ConnectionError(f"ERROR at '{str(self)}': {str(self[port])}"
+                                  f" already connected")
+
+        self[port].connect_to(remote_device, remote_port)
+        if remote_device[remote_port].bandwidth < self[port].bandwidth:
+            self[port].config(bandwidth=remote_device[remote_port].bandwidth)
 
     def disconnect(self, port: str):
         self.interfaces[port].disconnect()

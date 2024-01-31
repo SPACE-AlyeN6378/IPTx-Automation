@@ -13,7 +13,7 @@ class InterfaceList:
         self.loopbacks = []
         self.push(*args)
 
-    def __getitem__(self, port: str):
+    def __getitem__(self, port: str) -> Connector | Loopback:
         expected_item = None
 
         # Loopback port for e.g. 'l3'

@@ -22,13 +22,15 @@ def replace_key(given_dict: dict, chosen_value: Any, new_key: Any):
             given_dict[new_key] = given_dict.pop(key)
 
 
-def next_number(iterable: Iterable[int], start_from=False):
+# If any number is missing from a sequence of numbers, then we get that next missing number
+def next_number(iterable: Iterable[int], start_from=None):
     starting_number = 0
+
+    if start_from is not None:
+        starting_number = start_from
+
     if not iterable:
         return starting_number
-
-    if start_from:
-        starting_number = start_from
 
     for num in range_(starting_number, max(iterable)):
         if num not in iterable:
