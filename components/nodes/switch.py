@@ -7,7 +7,7 @@ from enum import Enum
 from colorama import Fore, Style
 from iptx_utils import SwitchportError
 
-from components.interfaces.connector import Connector
+from components.interfaces.physical_interface import PhysicalInterface
 
 from list_helper import list_to_str, replace_key
 
@@ -23,14 +23,14 @@ class ECNProtocol(Enum):
     LACP = 5
 
 
-class SwitchInterface(Connector):
-    def __init__(self, int_type: str, port: str | int, cidr: str = None, bandwidth: int = None, mtu: int = 1500,
-                 duplex: str = "auto") -> None:
+class SwitchInterface(PhysicalInterface):
+    def __init__(self, int_type: str, port: str | int, cidr: str = None) -> None:
 
-        super().__init__(int_type, port, cidr, bandwidth, mtu, duplex)
+        super().__init__(int_type, port, cidr)
         self.vlan_ids = set()
         self.__switchport_mode = None
         self.__dtp_enabled = True
+        self.__stp_bpdu_filter = True
 
         # Etherchannel
         self.port_channel = 0
@@ -40,6 +40,7 @@ class SwitchInterface(Connector):
         # Switchport command
         self.__switchport_cmd = []
         self.__channel_group_cmd = []
+        self.__stp_cmd = ["spanning-tree bpdufilter enable"]
 
     def set_vlans(self, mode: Mode.ACCESS | Mode.TRUNK | Mode.DOT1Q_TUNNEL = None,
                   vlan_ids: int | Iterable[int] = None,
@@ -173,6 +174,14 @@ class SwitchInterface(Connector):
         elif self.remote_device != other.remote_device:
             raise ConnectionError(f"ERROR: Not connected to the same device")
 
+    def set_stp_bpdu_filter(self, enable: bool = True) -> None:
+        self.__stp_bpdu_filter = enable
+        no_ = "" if enable else "no "
+
+        if self.__stp_cmd:
+            self.__stp_cmd.clear()
+        self.__stp_cmd.append(f"{no_}spanning-tree bpdufilter enable")
+
     @staticmethod
     def generate_eth_cmd(port_channel_num, protocol, unconditional):
         # Generate cisco command
@@ -230,9 +239,6 @@ class SwitchInterface(Connector):
     def get_command_block(self):
         commands = super().get_command_block()
 
-        if self.__channel_group_cmd:
-            self.__switchport_cmd.extend(self.__channel_group_cmd)
-
         if self.__switchport_cmd:
 
             if not commands:
@@ -245,10 +251,15 @@ class SwitchInterface(Connector):
                 commands.extend(self.__switchport_cmd)
                 commands.append(exit_)
 
-        self.__channel_group_cmd = []
+        commands[-1:-1] = self.__channel_group_cmd
+        commands[-1:-1] = self.__stp_cmd
+
+        self.__channel_group_cmd.clear()
         self.__switchport_cmd.clear()
 
         return commands
+
+
 
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -373,6 +384,8 @@ class Switch(NetworkDevice):
             print(f"{Fore.MAGENTA}DENIED: The Spanning-tree Protocol is already enabled{Style.RESET_ALL}")
         else:
             self.__spanning_tree = True
+            for interface in self.interfaces:
+                interface.set_stp_bpdu_filter(True)
 
             self.stp_config_cmds.append("spanning-tree vlan 1")
             for vlan in self.vlans:
@@ -387,6 +400,8 @@ class Switch(NetworkDevice):
                   f"and other issues if not managed carefully.{Style.RESET_ALL}")
 
             self.__spanning_tree = False
+            for interface in self.interfaces:
+                interface.set_stp_bpdu_filter(False)
 
             self.stp_config_cmds.append("no spanning-tree vlan 1")
             for vlan in self.vlans:
@@ -405,7 +420,7 @@ class Switch(NetworkDevice):
         if ports in self.port_channels.values():
             self.etherchannel_config_cmds.extend([
                 f"interface Port-channel {port_channel_num}",
-                SwitchInterface.generate_eth_cmd(port_channel_num, protocol, unconditional),
+                SwitchInterface.__generate_eth_cmd(port_channel_num, protocol, unconditional),
                 "exit"
             ])
             replace_key(self.port_channels, ports, port_channel_num)
