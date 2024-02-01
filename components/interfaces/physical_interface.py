@@ -10,22 +10,19 @@ class Mode(Enum):  # ENUM for switchport modes
     TRUNK = 2
 
 
-class Connector(Interface):
+class PhysicalInterface(Interface):
     BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
                   "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
 
-    def __init__(self, int_type: str, port: Union[str, int], cidr: str = None, bandwidth: int = None,
-                 mtu: int = 1500, duplex: str = "auto") -> None:
-
-        if duplex not in ["auto", "full", "half"]:
-            raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
+    def __init__(self, int_type: str, port: Union[str, int], cidr: str = None) -> None:
 
         super().__init__(int_type, port, cidr)
 
-        self.shutdown_state = True 
-        self.bandwidth = bandwidth if bandwidth else Connector.BANDWIDTHS[int_type]
-        self.mtu = mtu
-        self.duplex = duplex
+        self.shutdown_state = True
+        self.max_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
+        self.bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
+        self.mtu = 1500
+        self.duplex = "auto"
 
         # Used when a connection is established, otherwise
         self.remote_device = None      # Connector ID, aka SCR in F@H for router-to-router
@@ -40,7 +37,7 @@ class Connector(Interface):
     def validate_port(self) -> None:
         super().validate_port()
 
-        default_types = Connector.BANDWIDTHS.keys()
+        default_types = PhysicalInterface.BANDWIDTHS.keys()
 
         if self.int_type not in default_types:
             raise TypeError(
@@ -56,6 +53,11 @@ class Connector(Interface):
             self._changes_made["mtu"] = True
 
         if bandwidth:
+            if bandwidth > self.max_bandwidth:
+                print(f"{Fore.MAGENTA}DENIED: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
+                      f"bandwidth {self.max_bandwidth} bps. Capping it to the given maximum...{Style.RESET_ALL}")
+                self.bandwidth = self.max_bandwidth
+
             self.bandwidth = bandwidth
             self._changes_made["bandwidth"] = True
 
@@ -90,12 +92,16 @@ class Connector(Interface):
         self.release()
     
     def disconnect(self) -> None:
+        # Nullify the variables
         self.remote_device = None
         self.remote_port = None
+
+        # Set the bandwidth to default
+        self.max_bandwidth = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]
         self.shutdown()
 
     def __eq__(self, other):
-        if isinstance(other, Connector):
+        if isinstance(other, PhysicalInterface):
             return self.int_type == other.int_type \
                 and self.port == other.port \
                 and self.ip_address == other.ip_address \
@@ -103,12 +109,12 @@ class Connector(Interface):
                 and self.bandwidth == other.bandwidth \
                 and self.mtu == other.mtu \
                 and self.duplex == other.duplex \
-                and self.remote_device == other.destination_device
+                and self.remote_device == other.remote_device
 
         return False
     
     # Generates a block of commands
-    def get_command_block(self):
+    def generate_command_block(self):
         ios_commands = [f"interface {self.__str__()}"]
         
         for attr in self._changes_made.keys():

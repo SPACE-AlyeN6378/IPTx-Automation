@@ -1,29 +1,30 @@
 from __future__ import annotations
 
 from typing import List, Iterable
-from components.interfaces.interface_list import InterfaceList, Connector
+from components.interfaces.interface_list import InterfaceList, PhysicalInterface
 from components.interfaces.interface import Interface
 from components.interfaces.loopback import Loopback
 from components.nodes.notfound_error import NotFoundError
 from colorama import Style, Fore
 import re
+
+
 # import pyperclip
 
 
 class NetworkDevice:
-
     hostname_pattern = r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$"
     hostname_regex = re.compile(hostname_pattern)
 
     @staticmethod
-    def print_script(commands: Iterable[str], color = Fore.WHITE):
+    def print_script(commands: Iterable[str], color=Fore.WHITE):
         for command in commands:
             print(f"{color}{command}{Style.RESET_ALL}")
 
     # Constructor
     def __init__(self, node_id: str | int = None, hostname: str = "NetworkDevice", x: int = 0, y: int = 0,
-                 interfaces: Iterable[Connector] = None) -> None:
-        
+                 interfaces: Iterable[PhysicalInterface] = None) -> None:
+
         if not NetworkDevice.hostname_regex.match(hostname):
             raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
 
@@ -52,17 +53,17 @@ class NetworkDevice:
         return hash((self.__device_id, self.hostname))
 
     # Sends Cisco command to script
-    def __getitem__(self, port: str) -> Connector:
+    def __getitem__(self, port: str) -> PhysicalInterface:
         return self.interfaces[port]
 
     # Getters
     def get_id(self):
         return self.__device_id
 
-    def get_int(self, port: str) -> Connector:  # Get interface
+    def get_int(self, port: str) -> PhysicalInterface:  # Get interface
         return self.interfaces[port]
 
-    def get_ints(self, *ports: str) -> List[Connector]:
+    def get_ints(self, *ports: str) -> List[PhysicalInterface]:
         result = [self.interfaces[port] for port in ports]
         if any(interface is None for interface in result):
             raise NotFoundError(f"ERROR: One of the interfaces is not included in "
@@ -70,13 +71,14 @@ class NetworkDevice:
 
         return result
 
-    # def get_loopback(self, loopback_id: int) -> Loopback:
-    #     return self.interfaces[f"L{loopback_id}"]
+    def get_loopback(self, loopback_id: int) -> Loopback:
+        return self.interfaces[f"l{loopback_id}"]
 
     def get_remote_device(self, port):
         device = self.get_int(port).remote_device
         if device is None:
-            print(f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
+            print(
+                f"{Fore.YELLOW}WARNING: Unconnected '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
 
         return device
 
@@ -84,7 +86,7 @@ class NetworkDevice:
         remote_port = self.get_int(port).remote_port
         if remote_port is None:
             print(
-                f"{Fore.YELLOW}WARNING: Dangling connector '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
+                f"{Fore.YELLOW}WARNING: Unconnected '{self.get_int(port)}', so no remote device{Style.RESET_ALL}")
 
         return remote_port
 
@@ -96,7 +98,7 @@ class NetworkDevice:
 
         if not NetworkDevice.hostname_regex.match(hostname):
             raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
-        
+
         self.hostname = hostname
 
     def set_position(self, x: int = None, y: int = None):
@@ -111,20 +113,20 @@ class NetworkDevice:
     def release(self, port: str) -> None:
         self.get_int(port).release()
 
-    def add_int(self, *interfaces: Connector | Loopback) -> None:
+    def add_int(self, *interfaces: PhysicalInterface | Loopback) -> None:
         self.interfaces.push(*interfaces)
 
-    def remove_int(self, interface: str | Connector | Loopback) -> Connector | Loopback:
+    def remove_int(self, interface: str | PhysicalInterface | Loopback) -> PhysicalInterface | Loopback:
         return self.interfaces.pop(interface)
 
-    def connect(self, port: str, remote_device: NetworkDevice, remote_port: int | str):
+    def connect(self, port: str, remote_device: NetworkDevice, remote_port: int | str) -> None:
         if not isinstance(remote_device, NetworkDevice):
             raise TypeError(f"ERROR: This is not a networking device: {str(remote_device)}")
 
         if remote_device == self:
             raise ConnectionError(f"ERROR: Cannot connect interface to itself")
 
-        if not isinstance(self.interfaces[port], Connector):
+        if not isinstance(self.interfaces[port], PhysicalInterface):
             if self[port] is None:
                 raise TypeError(f"ERROR: The interface at port '{port}' does not exist")
             else:
@@ -135,8 +137,16 @@ class NetworkDevice:
                                   f" already connected")
 
         self[port].connect_to(remote_device, remote_port)
+
+        # Cap the bandwidth to an interface of the lowest bandwidth
         if remote_device[remote_port].bandwidth < self[port].bandwidth:
             self[port].config(bandwidth=remote_device[remote_port].bandwidth)
+
+        # Sets the MTU to 1500 by default if there's a mismatch
+        if remote_device[remote_port].mtu != self[port].mtu:
+            self[port].config(mtu=remote_device[remote_port].mtu)
+
+        # Sets the MTU to 1500 by default if there's a mismatch
 
     def disconnect(self, port: str):
         self.interfaces[port].disconnect()
@@ -147,12 +157,10 @@ class NetworkDevice:
         if self._changes_made["hostname"]:
             script.append(f"hostname {self.hostname}")
             self._changes_made["hostname"] = False
-        
+
         for interface in self.interfaces:
-            script.extend(interface.get_command_block())
+            script.extend(interface.generate_command_block())
 
         script.append("end")
-
         return script
 
-        # self.script = ["configure terminal", "end"]

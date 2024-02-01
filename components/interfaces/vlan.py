@@ -43,6 +43,6 @@ class VLAN:
 
         if cidr:
             self.interface.config(cidr=cidr)
-            ios_commands.extend(self.interface.get_command_block())
+            ios_commands.extend(self.interface.generate_command_block())
 
         return ios_commands

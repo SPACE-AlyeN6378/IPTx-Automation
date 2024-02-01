@@ -236,8 +236,8 @@ class SwitchInterface(PhysicalInterface):
         self.port_channel = 0
         self.ecn_protocol = None
 
-    def get_command_block(self):
-        commands = super().get_command_block()
+    def generate_command_block(self):
+        commands = super().generate_command_block()
 
         if self.__switchport_cmd:
 
@@ -259,12 +259,8 @@ class SwitchInterface(PhysicalInterface):
 
         return commands
 
-
-
-
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
 
 class Switch(NetworkDevice):
 

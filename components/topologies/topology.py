@@ -4,7 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from components.nodes.switch import Switch, SwitchInterface
 from components.nodes.router import Router
-from components.interfaces.connector import Connector
+from components.interfaces.physical_interface import PhysicalInterface
 from iptx_utils import NetworkError, NotFoundError
 from list_helper import next_number
 
@@ -83,7 +83,7 @@ class Topology:
                 break
 
     def connect_devices(self, device_id1: str | int, port1: str, device_id2: str | int, port2: str) -> None:
-        ethernet_types = list(Connector.BANDWIDTHS.keys())[1:5]
+        ethernet_types = list(PhysicalInterface.BANDWIDTHS.keys())[1:5]
         if not (self[device_id1][port1].int_type in ethernet_types
                 and self[device_id2][port2].int_type in ethernet_types):
 
@@ -104,5 +104,3 @@ class Topology:
 
         plt.show()
 
-
-print(list(Connector.BANDWIDTHS.keys())[1:5])
