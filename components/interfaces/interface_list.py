@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List
-from components.interfaces.connector import Connector
+from components.interfaces.physical_interface import PhysicalInterface
 from components.interfaces.loopback import Loopback
 from iptx_utils import NetworkError
 
@@ -13,7 +13,7 @@ class InterfaceList:
         self.loopbacks = []
         self.push(*args)
 
-    def __getitem__(self, port: str) -> Connector | Loopback:
+    def __getitem__(self, port: str) -> PhysicalInterface | Loopback:
         expected_item = None
 
         # Loopback port for e.g. 'l3'
@@ -79,9 +79,9 @@ class InterfaceList:
         return "[" + ", ".join(str(inf) for inf in self.connectors + self.loopbacks) + "]"
 
     # Adds a couple of interfaces to the list
-    def push(self, *args: Connector | Loopback) -> None:
+    def push(self, *args: PhysicalInterface | Loopback) -> None:
 
-        if not all(isinstance(arg, (Connector, Loopback)) for arg in args):
+        if not all(isinstance(arg, (PhysicalInterface, Loopback)) for arg in args):
             raise TypeError("All interfaces should be either a connector (e.g. GigabitEthernet) or a loopback")
 
         for arg in args:
@@ -93,7 +93,7 @@ class InterfaceList:
                     raise NetworkError(f"ERROR: Overlapping networks in '{arg.int_type}{arg.port}'")
                 
             # For Connectors and Cables
-            if isinstance(arg, Connector):
+            if isinstance(arg, PhysicalInterface):
                 ports = [inf.port for inf in self.connectors]
                     
                 if arg.port in ports:
@@ -107,11 +107,11 @@ class InterfaceList:
                 self.loopbacks.append(arg)
 
     # Adds a couple of interfaces to the list
-    def pop(self, inf: str | Connector | Loopback):
+    def pop(self, inf: str | PhysicalInterface | Loopback):
         if isinstance(inf, str):  # If it is a port number
             inf = self[inf]
 
-        if isinstance(inf, Connector):
+        if isinstance(inf, PhysicalInterface):
             self.connectors.remove(inf)
 
         elif isinstance(inf, Loopback):
