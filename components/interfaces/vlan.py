@@ -1,4 +1,3 @@
-from components.interfaces.interface_list import InterfaceList
 from components.interfaces.interface import Interface
 from typing import List
 

@@ -92,7 +92,7 @@ class SwitchInterface(PhysicalInterface):
             self.__switchport_cmd.append(f"switchport access vlan {list(self.vlan_ids)[0]}")
 
         elif self.__switchport_mode == Mode.TRUNK:
-            self.__switchport_cmd.append(f"switchport trunk allowed vlan {list_to_str(self.vlan_ids)}")
+            self.__switchport_cmd.append(f"switchport trunk allowed vlan {','.join(map(str, self.vlan_ids))}")
 
         # If auto-negotiation is enabled, it gets disabled
         if self.__dtp_enabled:
@@ -130,7 +130,7 @@ class SwitchInterface(PhysicalInterface):
         elif self.__switchport_mode == Mode.TRUNK:
             self.__switchport_cmd.extend([
                 "no switchport trunk encapsulation dot1q",
-                f"no switchport trunk allowed vlan {list_to_str(self.vlan_ids)}",
+                f"no switchport trunk allowed vlan {','.join(map(str, self.vlan_ids))}",
                 "no switchport mode trunk"
             ])
 
@@ -301,8 +301,8 @@ class Switch(NetworkDevice):
     def __getitem__(self, port: str) -> SwitchInterface:
         return self.interfaces[port]
 
-    def get_ints(self, *ports: str) -> list[SwitchInterface]:
-        data: list[SwitchInterface] = [item for item in super().get_ints(*ports) if isinstance(item, SwitchInterface)]
+    def interface_range(self, *ports: str) -> list[SwitchInterface]:
+        data: list[SwitchInterface] = [item for item in super().interface_range(*ports) if isinstance(item, SwitchInterface)]
         return data
 
     def get_vlan_dict(self) -> dict:
@@ -343,7 +343,7 @@ class Switch(NetworkDevice):
         # If only one port is assigned, otherwise a list is given
         ports = [ports] if isinstance(ports, str) else ports
 
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             if len(interface.vlan_ids) < 1 and len(vlan_ids) <= 1 and not trunking_only:
                 interface.set_vlans(Mode.ACCESS, vlan_ids, replace)
             else:
@@ -361,16 +361,16 @@ class Switch(NetworkDevice):
 
         ports = [ports] if isinstance(ports, str) else ports
 
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.remove_vlan(vlan_id)
 
     # Configures the interface as trunk, allowing all VLANs
     def set_default_trunk(self, *ports: str):
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.trunk_default()
 
     def reset_switchport(self, *ports: str):
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.reset_switchport()
 
     # Spanning-tree (Only the basics) =========================================================
@@ -426,11 +426,11 @@ class Switch(NetworkDevice):
             self.port_channels[port_channel_num] = ports
 
         # Validation
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.etherchannel_check(self[ports[0]])
 
         # Configure the interfaces
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.etherchannel(port_channel_num, protocol, unconditional)
 
     def remove_etherchannel(self, port_channel_num: int):
@@ -440,7 +440,7 @@ class Switch(NetworkDevice):
             f"no interface Port-channel {port_channel_num}",
         ])
 
-        for interface in self.get_ints(*ports):
+        for interface in self.interface_range(*ports):
             interface.remove_etherchannel()
 
     # Send script to the actual switch =================================================================================

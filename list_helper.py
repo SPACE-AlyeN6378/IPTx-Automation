@@ -12,7 +12,7 @@ def range_(start, end, step=1):
 
 
 def list_to_str(given_list: Iterable[int]) -> str:
-    return ",".join(str(number) for number in given_list)
+    return ",".join(map(str, given_list))
 
 
 def replace_key(given_dict: dict, chosen_value: Any, new_key: Any):

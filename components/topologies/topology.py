@@ -29,7 +29,7 @@ class Topology:
 
     def __getitem__(self, device_id_or_name: int | str) -> Switch | Router | None:
         for device in self.__graph.nodes():
-            if device_id_or_name in [device.get_id(), device.hostname]:
+            if device_id_or_name in [device.id(), device.hostname]:
                 return device
 
         raise NotFoundError(f"ERROR in AS_NUM {self.as_number}: Device '{device_id_or_name}' "
@@ -40,8 +40,8 @@ class Topology:
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {switch.hostname} is not a switch")
 
         # If the ID is not given, then we add the default ID
-        if switch.get_id() is None:
-            all_ids = [device_.get_id() for device_ in self.__graph.nodes() if isinstance(device_.get_id(), int)]
+        if switch.id() is None:
+            all_ids = [device_.id() for device_ in self.__graph.nodes() if isinstance(device_.id(), int)]
             switch.update_id(next_number(all_ids, 1))
 
         if self.__graph.has_node(switch):
@@ -78,7 +78,7 @@ class Topology:
 
     def remove_device_by_id(self, device_id: int | str):
         for device in self.get_all_nodes():
-            if device_id == device.get_id():
+            if device_id == device.id():
                 self.__graph.remove_node(device)
                 break
 
