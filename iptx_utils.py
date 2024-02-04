@@ -1,4 +1,5 @@
-from typing import Iterable
+from typing import Iterable, Tuple
+import components.interfaces.interface as inf
 
 # *** CUSTOM EXCEPTIONS ***
 class NetworkError(Exception):
@@ -17,6 +18,48 @@ class NotFoundError(Exception):
     def __init__(self, message="Not found"):
         self.message = message
         super().__init__(self.message)
+
+
+# Split f0/0 --> (FastEthernet, 0/0) from GNS3 =================================================
+def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
+
+    # Can't accept both
+    if shortname and longname:
+        raise TypeError("Which parameter do you expect me to use? Please use any one of these two.")
+
+    required_int_type = ""
+
+    # Short name of format, for e.g. g0/1/0
+    if shortname:
+
+        for int_type in inf.Interface.DEFAULT_TYPES:
+            if int_type[0].lower() == shortname[0].lower():
+                required_int_type = int_type
+                break
+
+        if not required_int_type:
+            raise ValueError(f"The initial '{shortname[0]}' is of an invalid interface type")
+
+        required_port = shortname[1:]
+
+    # Long name of format, for e.g. GigabitEthernet0/1/0
+    elif longname:
+        for int_type in inf.Interface.DEFAULT_TYPES:
+            if int_type in longname[:len(int_type)]:
+                required_int_type = int_type
+                break
+
+        if not required_int_type:
+            raise ValueError(f"Unacceptable format or invalid interface type '{longname}' - Must be like e.g. "
+                             f"GigabitEthernet0/0/1")
+
+        required_port = longname[len(required_int_type):]
+
+    # If the parameters go missing
+    else:
+        raise TypeError("Argument missing")
+
+    return required_int_type, required_port
 
 
 # Custom range function that includes the end value in the range.

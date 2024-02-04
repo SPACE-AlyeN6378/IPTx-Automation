@@ -9,50 +9,6 @@ class Interface:
     DEFAULT_TYPES = ("ATM", "Ethernet", "FastEthernet", "GigabitEthernet", "TenGigabitEthernet",
                      "Serial", "wlan-gigabitethernet", "Loopback", "Tunnel", "VLAN")
 
-    # Split f0/0 --> (FastEthernet, 0/0) from GNS3 =================================================
-    @staticmethod
-    def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
-
-        # Can't accept both
-        if shortname and longname:
-            raise TypeError("Which parameter do you expect me to use? Please use any one of these two.")
-
-        required_int_type = ""
-
-        # Short name of format, for e.g. g0/1/0
-        if shortname:
-
-            for int_type in Interface.DEFAULT_TYPES:
-                if int_type[0].lower() == shortname[0].lower():
-                    required_int_type = int_type
-                    break
-
-            if not required_int_type:
-                raise ValueError(f"The initial '{shortname[0]}' is of an invalid interface type")
-
-            required_port = shortname[1:]
-
-        # Long name of format, for e.g. GigabitEthernet0/1/0
-        elif longname:
-            for int_type in Interface.DEFAULT_TYPES:
-                if int_type in longname[:len(int_type)]:
-                    required_int_type = int_type
-                    break
-
-            if not required_int_type:
-                raise ValueError(f"Unacceptable format or invalid interface type '{longname}' - Must be like e.g. "
-                                 f"GigabitEthernet0/0/1")
-
-            required_port = longname[len(required_int_type):]
-
-        # If the parameters go missing
-        else:
-            raise TypeError("Argument missing")
-
-        Interface.is_valid_port(required_port)  # Check if the port number is of the valid port type
-
-        return required_int_type, required_port
-
     # Gets the IP Address and Subnet mask from CIDR
     @staticmethod
     def get_ip_and_subnet(cidr: str) -> Tuple[Union[str, None], Union[str, None]]:
@@ -97,42 +53,40 @@ class Interface:
         self.int_type = int_type
         self.port = port
         self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
-        self.validate_port()
-        self._changes_made = {
-            "ip address": self.ip_address is not None
+        self.validate_port()  # Check if the port number is of the valid format
+
+        # Cisco IOS commands
+        self._cisco_commands = {
+            "ip address": f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""
         }
 
-    # Some operator overloadings
+    # Stringify
     def __str__(self):
         if self.int_type in ("Tunnel", "VLAN"):
             return f"{self.int_type} {self.port}"
         else:
             return f"{self.int_type}{self.port}"
 
+    # Equality (for identification)
     def __eq__(self, other):
         if isinstance(other, Interface):
             return self.int_type == other.int_type and self.port == other.port \
-                   and self.ip_address == other.ip_address and self.subnet_mask == other.subnet_mask
+                and self.ip_address == other.ip_address and self.subnet_mask == other.subnet_mask
 
         return False
 
     def __contains__(self, item):
         return self.int_type == item.int_type and self.port == item.port \
-               and self.ip_address == item.ip_address and self.subnet_mask == item.subnet_mask
-    
-    def _add_to_block(self, *commands: str):
-        exit_ = self.__command_block.pop() 
-        self.__command_block.extend(commands)
-        self.__command_block.append(exit_)
+            and self.ip_address == item.ip_address and self.subnet_mask == item.subnet_mask
 
     # Configure the interface and generate Cisco command to be sent
-    def config(self, cidr: str = None) -> List[str]:
+    def config(self, cidr: str = None) -> None:
         # Change a couple of attributes
         if cidr:
             self.ip_address, self.subnet_mask = Interface.get_ip_and_subnet(cidr)
 
-        self._changes_made["ip address"] = self.ip_address is not None and self.subnet_mask is not None
-    
+        self._cisco_commands["ip address"] = f"ip address {self.ip_address} {self.subnet_mask}"
+
     # Network Address
     def network_address(self):
         ip_address = ipaddress.IPv4Network(f"{self.ip_address}/{self.subnet_mask}", strict=False)
@@ -166,13 +120,14 @@ class Interface:
 
     # Generates a block of commands
     def generate_command_block(self):
-        ios_commands = [f"interface {self.__str__()}"]
-        if self._changes_made["ip address"]:
-            ios_commands.append(f"ip address {self.ip_address} {self.subnet_mask}")
-            self._changes_made["ip address"] = False
+        ios_commands = [f"interface {str(self)}"]
+
+        if self._cisco_commands["ip address"]:
+            ios_commands.append(self._cisco_commands["ip address"])
+            self._cisco_commands["ip address"] = ""
 
         if len(ios_commands) > 1:
             ios_commands.append("exit")
             return ios_commands
-        
+
         return []
