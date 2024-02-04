@@ -85,30 +85,21 @@ class Interface:
         if cidr:
             self.ip_address, self.subnet_mask = Interface.get_ip_and_subnet(cidr)
 
+        # Generate cisco command
         self._cisco_commands["ip address"] = f"ip address {self.ip_address} {self.subnet_mask}"
 
     # Network Address
-    def network_address(self):
+    def network_address(self) -> None:
         ip_address = ipaddress.IPv4Network(f"{self.ip_address}/{self.subnet_mask}", strict=False)
         return ip_address.network_address
 
     # Wildcard Mask
-    def wildcard_mask(self):
+    def wildcard_mask(self) -> None:
         octets = [int(octet) for octet in self.subnet_mask.split('.')]
         wildcard_mask_list = [255 - octet for octet in octets]
         wildcard_mask = '.'.join(map(str, wildcard_mask_list))
 
         return wildcard_mask
-
-    @staticmethod
-    def insert_cmd(all_commands: List[str], command: List[str] | str) -> None:
-        if command:
-            if isinstance(command, str):
-                all_commands.insert(-1, command)
-                command = ""
-            else:
-                all_commands[-1:-1] = command
-                command.clear()
 
     # Generate Cisco command to advertise OSPF route
     # Goes to router interface
@@ -119,7 +110,7 @@ class Interface:
     #         raise NotImplementedError("The IP address and subnet mask are missing")
 
     # Generates a block of commands
-    def generate_command_block(self):
+    def generate_command_block(self) -> List[str]:
         ios_commands = [f"interface {str(self)}"]
 
         if self._cisco_commands["ip address"]:
