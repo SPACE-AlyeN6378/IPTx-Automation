@@ -31,12 +31,12 @@ interface = Interface("FastEthernet", "0/0", "192.168.1.1")
 ```
 This example shows that an interface, 'FastEthernet0/0' with CIDR '192.168.1.1/32' has been introduced to the environment.
 
-> **NOTE**: This is a parent class module which will not be used while initiating the project. Because the interfaces like loopbacks, port channels, VLANs and phyiscal interfaces will be inherited from this class, and be used in the project.
+> **NOTE**: This is a parent class module which will not be used while initiating the project. Because the interfaces like loopbacks, port channels, VLANs and phyiscal interfaces will be derived from this class, and be used in the project.
 
 ### Public Methods
 Function Name|Parameters|Description|Return
 -------------|----------|-----------|------
-`config`|cidr: str|Changes any or all of the attributes in a single line|Nothing
+`config`|`cidr: str`|Changes any or all of the attributes in a single line|Nothing
 `network_address`|-|Calculates the network address from the IPv4 Address and subnet mask of this interface|The network address in `str` format
 `wildcard_mask`|-|Calculates the wildcare from the IPv4 subnet mask of this interface|The wilcard mask in `str` format
 `generate_command_block`|-|Generates a block of Cisco IOS commands|List of commands in `List[str]` format
@@ -104,6 +104,15 @@ exit
 
 This will be used to integrate to the the full configuration command while being generated in the `NetworkDevice`.
 
-### Overloaded operator
-- Equals `==`: Equality check using `int_type`, `port`, `ip_address` and `subnet_mask`
-- Contains `__contains__`: To see if an interface exists in a collection of interfaces (e.g. `interface in interface_list`)
+### Static Helper Functions
+
+Function Name|Parameters|Description|Return
+-------------|----------|-----------|------
+`get_ip_and_subnet`|`cidr: str` e.g. 192.168.42.1/24|Extracts the IP Address and calculates the subnet mask from the prefix in the CIDR|Tuple[IP address, Subnet mask]
+`validate_port`|`int_type: str, port: str \| int`|Raises an error if the port number is not an integer (for loopbacks) or not of the format x/x/...|None
+`range`|`prefix: str` | `int, numbers: Iterable[int]`|Computes the range of interface ports using prefix (for e.g. `2/0`) and a list of numbers (for e.g. `[3, 4, 5]`)|List of interfaces (for e.g. `2/0/3, 2/0/4, 2/0/5`)
+
+This interface class module is just the base model and does not have much significance, and therefore will not be used in the project. Instead, these two new interfaces derived from the base model will be used.
+
+- [**Physical Interface**](./physical_interfaces)
+- [**Loopback**]()

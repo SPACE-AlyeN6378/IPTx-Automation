@@ -4,7 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from components.nodes.switch import Switch, SwitchInterface
 from components.nodes.router import Router
-from components.interfaces.physical_interface import PhysicalInterface
+from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from iptx_utils import NetworkError, NotFoundError
 from list_helper import next_number
 

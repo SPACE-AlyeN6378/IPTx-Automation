@@ -1,4 +1,4 @@
-from components.interfaces.physical_interface import PhysicalInterface
+from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 import components.nodes.router as rt
 
 class RouterInterface(PhysicalInterface):

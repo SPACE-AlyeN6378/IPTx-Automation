@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Iterable, Type
 from iptx_utils import NetworkError
-from components.interfaces.physical_interface import PhysicalInterface
+from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from components.interfaces.interface import Interface
 from components.interfaces.loopback import Loopback
 from iptx_utils import NotFoundError, next_number

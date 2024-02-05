@@ -7,7 +7,7 @@ from enum import Enum
 from colorama import Fore, Style
 from iptx_utils import SwitchportError
 
-from components.interfaces.physical_interface import PhysicalInterface
+from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
 from list_helper import list_to_str, replace_key
 
@@ -64,8 +64,10 @@ class SwitchInterface(PhysicalInterface):
 
         # Set or replace the VLAN IDs
         if vlan_ids:
+            # The switchport mode needs to be set first
             if not self.__switchport_mode:
                 raise SwitchportError("ERROR: The switchport mode is neither in ACCESS, TRUNK nor DOT1Q_TUNNEL")
+
 
             if not isinstance(vlan_ids, Iterable):
                 vlan_ids = [vlan_ids]
@@ -76,25 +78,30 @@ class SwitchInterface(PhysicalInterface):
                 self.vlan_ids = self.vlan_ids | set(vlan_ids)
 
         # Generate commands
+        # ACCESS or DOT1Q_TUNNEL
         if self.__switchport_mode in {Mode.ACCESS, Mode.DOT1Q_TUNNEL}:
-            # When more than one VLANs are contained
+            # When more than one VLANs are contained...
             if len(self.vlan_ids) > 1:
                 print(f"{Fore.YELLOW}WARNING: There are more than one VLAN IDs in "
                       f"interface {str(self)} '{str(self.vlan_ids)}'.")
 
+                # Use the first VLAN in the parameter
                 if vlan_ids:
                     print(f"Using VLAN {vlan_ids[0]} in the parameter...{Style.RESET_ALL}")
                     self.vlan_ids = {vlan_ids[0]}
+                # Otherwise, use the first VLAN in the attribute
                 else:
                     print(f"Using VLAN {list(self.vlan_ids)[0]} in the properties...{Style.RESET_ALL}")
                     self.vlan_ids = {list(self.vlan_ids)[0]}
-
+            
+            # Add the command to a list of switchport commands
             self.__switchport_cmd.append(f"switchport access vlan {list(self.vlan_ids)[0]}")
 
+        # TRUNKING
         elif self.__switchport_mode == Mode.TRUNK:
             self.__switchport_cmd.append(f"switchport trunk allowed vlan {','.join(map(str, self.vlan_ids))}")
 
-        # If auto-negotiation is enabled, it gets disabled
+        # If auto-negotiation is enabled, it gets disabled automatically
         if self.__dtp_enabled:
             self.__switchport_cmd.append("switchport nonegotiate")
             self.__dtp_enabled = False

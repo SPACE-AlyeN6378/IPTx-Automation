@@ -1,5 +1,6 @@
 from typing import List, Union, Any
 from components.interfaces.interface import Interface
+import components.nodes.network_device as device
 from colorama import Fore, Style
 from enum import Enum
 
@@ -17,26 +18,29 @@ class PhysicalInterface(Interface):
     def __init__(self, int_type: str, port: Union[str, int], cidr: str = None) -> None:
 
         super().__init__(int_type, port, cidr)
+        self.validate_interface_type()
 
+        # New attributes
         self.shutdown_state = True
-        self.max_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
+        self.max_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]     # Initial assumption about the bandwidth
         self.bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
         self.mtu = 1500
         self.duplex = "auto"
 
         # Used when a connection is established, otherwise
-        self.remote_device = None      # Connector ID, aka SCR in F@H for router-to-router
+        self.remote_device = None
         self.remote_port = None
 
-        self._changes_made["shutdown"] = True
-        self._changes_made["bandwidth"] = True
-        self._changes_made["mtu"] = True
-        self._changes_made["duplex"] = True
+        # Cisco commands
+        self._cisco_commands.update({
+            "shutdown": "shutdown",
+            "bandwidth": f"bandwidth {self.bandwidth}",
+            "mtu": f"mtu {self.mtu}",
+            "duplex": f"duplex {self.duplex}"
+        })
 
-    # Check if the interface type is actually a connector (e.g. Ethernet)
-    def validate_port(self) -> None:
-        super().validate_port()
-
+    # Check if the interface type is actually a physical interface (e.g. Ethernet)
+    def validate_interface_type(self) -> None:
         default_types = PhysicalInterface.BANDWIDTHS.keys()
 
         if self.int_type not in default_types:
@@ -45,48 +49,54 @@ class PhysicalInterface(Interface):
                 f"interfaces {', '.join(default_types)}")
 
     def config(self, cidr: str = None, bandwidth: int = None, mtu: int = None,
-               duplex: str = None):
+               duplex: str = None) -> None:
         super().config(cidr)
 
         if mtu:
             self.mtu = mtu
-            self._changes_made["mtu"] = True
+            self._cisco_commands["mtu"] = f"mtu {self.mtu}"
 
         if bandwidth:
+            """
+            If the bandwidth exceeds the maximum permittable bandwidth, then it caps it down to the given maximum
+            """
             if bandwidth > self.max_bandwidth:
-                print(f"{Fore.MAGENTA}DENIED: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
+                print(f"{Fore.YELLOW}WARNING: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
                       f"bandwidth {self.max_bandwidth} bps. Capping it to the given maximum...{Style.RESET_ALL}")
                 self.bandwidth = self.max_bandwidth
+            else:
+                self.bandwidth = bandwidth
 
-            self.bandwidth = bandwidth
-            self._changes_made["bandwidth"] = True
+            self._cisco_commands["bandwidth"] = f"bandwidth {self.bandwidth}"
 
         if duplex:
             if duplex not in ["auto", "full", "half"]:
                 raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
             
             self.duplex = duplex
-            self._changes_made["duplex"] = True
+            self._cisco_commands["duplex"] = f"duplex {self.duplex}"
 
+    # Shuts down the interface
     def shutdown(self) -> None:
         if self.shutdown_state:
             print(f"{Fore.MAGENTA}DENIED: This connector is already shut down.{Style.RESET_ALL}")
         else:
             self.shutdown_state = True
-            self._changes_made["shutdown"] = True
+            self._cisco_commands["shutdown"] = "shutdown"
 
+    # Releases the interface
     def release(self) -> None:
         if not self.shutdown_state:
             print(f"{Fore.MAGENTA}DENIED: This connector has already opened.{Style.RESET_ALL}")
         else:
             if not self.remote_device:
-                print(f"{Fore.MAGENTA}DENIED: Dangling connector or not connected, so it remains shut{Style.RESET_ALL}")
+                print(f"{Fore.MAGENTA}DENIED: Unconnected physical interface, so it remains shut{Style.RESET_ALL}")
 
             else:
                 self.shutdown_state = False
-                self._changes_made["shutdown"] = True
+                self._cisco_commands["shutdown"] = "no shutdown"
             
-    def connect_to(self, device: Any, remote_port: int | str) -> None:
+    def connect_to(self, device: device.NetworkDevice, remote_port: str) -> None:
         self.remote_device = device
         self.remote_port = remote_port
         self.release()
@@ -115,31 +125,20 @@ class PhysicalInterface(Interface):
     
     # Generates a block of commands
     def generate_command_block(self):
-        ios_commands = [f"interface {self.__str__()}"]
+        # Gets a new list of commands
+        command_block = [f"interface {self.__str__()}"]
         
-        for attr in self._changes_made.keys():
-            if self._changes_made[attr]:
-                if attr == "shutdown":
-                    no = "" if self.shutdown_state else "no "
-                    ios_commands.append(f"{no}shutdown")
+        for attr in self._cisco_commands.keys():
+            # Check if each line of the command exists
+            if self._cisco_commands[attr]:
+                # Add to command_block and clear the string
+                command_block.append(self._cisco_commands[attr])
+                self._cisco_commands[attr] = ""
 
-                elif attr == "ip address":
-                    ios_commands.append(f"{attr} {self.ip_address} {self.subnet_mask}")
-
-                elif attr == "bandwidth":
-                    ios_commands.append(f"{attr} {self.bandwidth}")
-
-                elif attr == "mtu":
-                    ios_commands.append(f"{attr} {self.mtu}")
-
-                elif attr == "duplex":
-                    ios_commands.append(f"{attr} {self.duplex}")
-                    
-                self._changes_made[attr] = False
-
-        if len(ios_commands) > 1:
-            ios_commands.append("exit")
-            return ios_commands
+        # If the generated command exists, return the full list of commands, otherwise return an empty list
+        if len(command_block) > 1:
+            command_block.append("exit")
+            return command_block
         
         return []
 

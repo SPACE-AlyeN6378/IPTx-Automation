@@ -11,7 +11,7 @@ class Interface:
 
     # Gets the IP Address and Subnet mask from CIDR
     @staticmethod
-    def get_ip_and_subnet(cidr: str) -> Tuple[Union[str, None], Union[str, None]]:
+    def get_ip_and_subnet(cidr: str) -> Tuple[str | None, str | None]:
         if cidr:
             ip_network = ipaddress.IPv4Network(cidr, strict=False)
             ip_address = cidr.split("/")[0]
@@ -21,16 +21,17 @@ class Interface:
             return None, None
 
     # To make sure that the port is of the format x or x/x/x/... (x is a number) ===================
-    def validate_port(self) -> None:
+    @staticmethod
+    def validate_port(int_type: str, port: str | int) -> None:
 
-        if self.int_type in ["Loopback", "Tunnel", "VLAN"]:
-            if not isinstance(self.port, int) or self.port < 0:
-                raise ValueError(f"Invalid format: '{self.port}' - Please use positive integers")
+        if int_type in ["Loopback", "Tunnel", "VLAN"]:
+            if not isinstance(port, int) or port < 0:
+                raise ValueError(f"Invalid format: '{port}' - Please use positive integers")
 
         else:
-            numbers = self.port.split("/")
+            numbers = port.split("/")
             if not all(char.isdigit() for char in numbers):
-                raise ValueError(f"Invalid format: '{self.port}' - Please use format x/x/..., where x is an integer")
+                raise ValueError(f"Invalid format: '{port}' - Please use format x/x/..., where x is an integer")
 
     # Get interface range
     @staticmethod
@@ -53,7 +54,7 @@ class Interface:
         self.int_type = int_type
         self.port = port
         self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
-        self.validate_port()  # Check if the port number is of the valid format
+        Interface.validate_port(self.int_type, self.port)  # Check if the port number is of the valid format
 
         # Cisco IOS commands
         self._cisco_commands = {
