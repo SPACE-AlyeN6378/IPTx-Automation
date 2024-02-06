@@ -34,12 +34,12 @@ This example shows that an interface, 'FastEthernet0/0' with CIDR '192.168.1.1/3
 > **NOTE**: This is a parent class module which will not be used while initiating the project. Because the interfaces like loopbacks, port channels, VLANs and phyiscal interfaces will be derived from this class, and be used in the project.
 
 ### Public Methods
-Function Name|Parameters|Description|Return
--------------|----------|-----------|------
-`config`|`cidr: str`|Changes any or all of the attributes in a single line|Nothing
-`network_address`|-|Calculates the network address from the IPv4 Address and subnet mask of this interface|The network address in `str` format
-`wildcard_mask`|-|Calculates the wildcare from the IPv4 subnet mask of this interface|The wilcard mask in `str` format
-`generate_command_block`|-|Generates a block of Cisco IOS commands|List of commands in `List[str]` format
+| Function Name            | Parameters  | Description                                                                            | Return                                 |
+|--------------------------|-------------|----------------------------------------------------------------------------------------|----------------------------------------|
+| `config`                 | `cidr: str` | Changes any or all of the attributes in a single line                                  | Nothing                                |
+| `network_address`        | -           | Calculates the network address from the IPv4 Address and subnet mask of this interface | The network address in `str` format    |
+| `wildcard_mask`          | -           | Calculates the wild card from the IPv4 subnet mask of this interface                   | The wilcard mask in `str` format       |
+| `generate_command_block` | -           | Generates a block of Cisco IOS commands                                                | List of commands in `List[str]` format |
 
 #### Configuration `config(self, cidr: str = None) -> None`
 Simply put, this function alters any or all of the attributes in a single line. For example:
@@ -115,4 +115,4 @@ Function Name|Parameters|Description|Return
 This interface class module is just the base model and does not have much significance, and therefore will not be used in the project. Instead, these two new interfaces derived from the base model will be used.
 
 - [**Physical Interface**](./physical_interfaces)
-- [**Loopback**]()
+- [**Loopback**](./loopback)

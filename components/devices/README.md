@@ -40,7 +40,7 @@ As obvious, some of the derived network devices that is used in the project are:
 | [`remove_interface()`](./network_device.py#L160) | Port number or the interface itself `interface_or_port: str \| PhysicalInterface \| Loopback` | Removes an interface by its port number                | Removed interface |
 
 ### Configuration Script Generator [`send_script()`](./network_device.py#L174)
-
-This generates a complete Cisco command and sends it to the networking devices. (For now, it copy/pastes using 
-`pyperclip` library). The netmiko library will use this list, and send them to the actual networking devices. 
-This automates all the necessary configuration and reduces hassles from being manually configured.
+This function generates a complete Cisco command script and sends it to the networking devices. 
+Currently, it copies and pastes using the `pyperclip` library. The `netmiko` library will utilize this script 
+to send configurations to the actual networking devices, automating all necessary configuration tasks and reducing 
+the need for manual intervention.
