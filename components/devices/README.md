@@ -41,4 +41,6 @@ As obvious, some of the derived network devices that is used in the project are:
 
 ### Configuration Script Generator [`send_script()`](./network_device.py#L174)
 
-This generates a complete Cisco command and sends it to the networking devices. (For now, it copy/pastes using `pyperclip` library)
+This generates a complete Cisco command and sends it to the networking devices. (For now, it copy/pastes using 
+`pyperclip` library). The netmiko library will use this list, and send them to the actual networking devices. 
+This automates all the necessary configuration and reduces hassles from being manually configured.
