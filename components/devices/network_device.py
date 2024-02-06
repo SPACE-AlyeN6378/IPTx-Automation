@@ -14,32 +14,36 @@ import re
 
 
 class NetworkDevice:
+    # Regex for hostname validation
     hostname_pattern = r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$"
     hostname_regex = re.compile(hostname_pattern)
-
+    
+    # Print out the script
     @staticmethod
     def print_script(commands: Iterable[str], color=Fore.WHITE):
         for command in commands:
             print(f"{color}{command}{Style.RESET_ALL}")
 
     # Constructor
-    def __init__(self, node_id: str | int = None, hostname: str = "NetworkDevice",
+    def __init__(self, device_id: str | int = None, hostname: str = "NetworkDevice",
                  interfaces: Iterable[PhysicalInterface] = None) -> None:
 
         # Hostname validation
         if not NetworkDevice.hostname_regex.match(hostname):
             raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
 
-        # Hostname validation
+        # If the interface is not given
         if interfaces is None:
             interfaces = []
 
-        self.__device_id = node_id
+        # Attributes
+        self.__device_id = device_id
         self.hostname = hostname
         self.__phys_interfaces = []
         self.__loopbacks = []
         self.add_interface(*interfaces)
 
+        # Cisco commands
         self.__hostname_cmd = f"hostname {self.hostname}"
 
     # Stringify

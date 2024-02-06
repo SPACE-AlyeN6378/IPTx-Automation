@@ -22,6 +22,11 @@ The "Physical Interface" class, an extension of the base [`Interface`](..) class
 - `remote_device: Switch | Router`: The device the interface is connected to on the other side
 - `remote_port: str`: The port of the remote device where the interface is connected to
 
+### Initialization
+```python
+my_interface = PhysicalInterface(int_type: str, port: str | int, cidr: str)
+```
+
 ### Overridden Functions
 #### Configuration `config(self, cidr: str, bandwidth: int, mtu: int, duplex: str) -> None`
 This changes one of the attributes of this interface in the given parameters. But for this class structure, the new attributes like bandwidth, MTU, and Duplex can be altered.
