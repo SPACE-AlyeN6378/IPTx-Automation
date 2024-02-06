@@ -17,7 +17,7 @@ class NetworkDevice:
     # Regex for hostname validation
     hostname_pattern = r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$"
     hostname_regex = re.compile(hostname_pattern)
-    
+
     # Print out the script
     @staticmethod
     def print_script(commands: Iterable[str], color=Fore.WHITE):
@@ -44,6 +44,7 @@ class NetworkDevice:
         self.add_interface(*interfaces)
 
         # Cisco commands
+        self._cisco_commands = {"hostname": [self.hostname]}
         self.__hostname_cmd = f"hostname {self.hostname}"
 
     # Stringify
@@ -108,6 +109,7 @@ class NetworkDevice:
                 f"{Fore.YELLOW}WARNING: Unconnected '{self.interface(port)}', so no remote device{Style.RESET_ALL}")
 
         return port_
+
     # -----------------------------------------------------------------------
 
     # *** Setters and modifiers ***
@@ -116,19 +118,21 @@ class NetworkDevice:
         self.__device_id = new_id
 
     # Changes the hostname
-    def set_hostname(self, hostname: str):
+    def set_hostname(self, new_hostname: str):
 
-        if not NetworkDevice.hostname_regex.match(hostname):
-            raise ValueError(f"ERROR: '{hostname}' is not a valid hostname")
+        if not NetworkDevice.hostname_regex.match(new_hostname):
+            raise ValueError(f"ERROR: '{new_hostname}' is not a valid hostname")
 
-        self.hostname = hostname
-        self.__hostname_cmd = f"hostname {self.hostname}"
+        self.hostname = new_hostname
+
+        # Update the dictionary of cisco commands
+        self.__cisco_commands["hostname"] = [f"hostname {self.hostname}"]
 
     # Adds the interfaces
     def add_interface(self, *new_interfaces: PhysicalInterface | Loopback) -> None:
         # Check if all the interfaces are either a physical interface or a loopback
         if not all(isinstance(interface, (PhysicalInterface, Loopback)) for interface in new_interfaces):
-            raise TypeError("All interfaces should be either a connector (e.g. GigabitEthernet) or a loopback")
+            raise TypeError("All interfaces should be either a physical interface (e.g. GigabitEthernet) or a loopback")
 
         # Loop through each new interfaces
         for interface in new_interfaces:
@@ -167,51 +171,24 @@ class NetworkDevice:
 
         return interface
 
-    # Establish connection
-    def connect(self, port: str, remote_device: Type[NetworkDevice], remote_port: int | str) -> None:
-        # Data type validation
-        if not isinstance(remote_device, NetworkDevice):
-            raise TypeError(f"ERROR in device {self.hostname}: This is "
-                            f"not a networking device: {str(remote_device)}")
-
-        # Disallows connection to itself
-        if remote_device == self:
-            raise ConnectionError(f"ERROR in device {self.hostname}: "
-                                  f"Cannot connect interface to itself")
-
-        # If the port is not a physical interface
-        if not isinstance(self.interface(port), PhysicalInterface):
-            raise TypeError(f"ERROR in device '{str(self)}': The interface at port '{port}' "
-                            f"is not a physical interface")
-
-        # If the port is already connected
-        if self.interface(port).remote_device is not None:
-            raise ConnectionError(f"ERROR in device '{str(self)}': {str(self.interface(port))}"
-                                  f" already connected")
-
-        self.interface(port).connect_to(remote_device, remote_port)
-
-        # Cap the bandwidth to an interface of the lowest bandwidth
-        if remote_device.interface(remote_port).bandwidth < self.interface(port).bandwidth:
-            self.interface(port).config(bandwidth=remote_device[remote_port].bandwidth)
-
-        # Sets the MTU to 1500 by default if there's a mismatch
-        if remote_device.interface(remote_port).mtu != self.interface(port).mtu:
-            self.interface(port).config(mtu=remote_device[remote_port].mtu)
-
-    def disconnect(self, port: str):
-        self.interface(port).disconnect()
-
+    # Generate a complete configuration script
     def send_script(self) -> List[str]:
+        # Start with 'configure terminal'
         script = ["configure terminal"]
 
-        if self.__hostname_cmd:
-            script.append(f"hostname {self.hostname}")
-            self.__hostname_cmd = ""
-
+        # Iterate through each cisco command by key
+        for attr in self._cisco_commands.keys():
+            # Add the cisco commands to the script and clear it
+            script.extend(self._cisco_commands[attr])
+            self._cisco_commands[attr].clear()  # So that it doesn't have to added again, until
+            # any of the attributes have changed
+        """
+        NOTE: For this configuration, only the hostname configuration is added. There are more lines of code in routers
+        and switches.
+        """
+        # Iterate through each interface
         for interface in self.all_interfaces():
             script.extend(interface.generate_command_block())
 
         script.append("end")
         return script
-

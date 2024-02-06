@@ -95,12 +95,39 @@ class PhysicalInterface(Interface):
             else:
                 self.shutdown_state = False
                 self._cisco_commands["shutdown"] = "no shutdown"
-            
-    def connect_to(self, device: device.NetworkDevice, remote_port: str) -> None:
+
+    """
+    Description: Establishes a connection. It basically sets the remote device 
+    and its respective port to the ones given in the parameter.
+    
+    Parameters: Network device, its port and the new bandwidth. (In case if an ethernet cable of lower bandwidth is used, 
+    the 'new_bandwidth' parameter is used to reduce the bandwidth)
+    """
+    def connect_to(self, device: device.NetworkDevice, remote_port: str, new_bandwidth: int = None) -> None:
+        # Assign the network device and port number
         self.remote_device = device
         self.remote_port = remote_port
+
+        # Release the interface
         self.release()
-    
+
+        # Reduce the bandwidth, maximize the MTU and set the duplex to auto if necessary
+        remote_int_bandwidth = self.remote_device.interface(remote_port).bandwidth  # Bandwidth on the remote device
+        if remote_int_bandwidth < self.bandwidth:   # If the bandwidth at the remote port is lower
+            self.max_bandwidth = remote_int_bandwidth   # Set the maximum bandwidth
+            if new_bandwidth:
+                self.config(bandwidth=new_bandwidth)
+            else:
+                self.config(bandwidth=self.max_bandwidth)
+
+        remote_int_mtu = self.remote_device.interface(remote_port).mtu
+        if remote_int_mtu > self.mtu:  # If the MTU at the remote port is higher
+            self.config(bandwidth=remote_int_mtu)
+
+        remote_int_duplex = self.remote_device.interface(remote_port)
+        if remote_int_duplex != self.duplex and self.duplex != "auto" and remote_int_duplex != "auto":
+            self.config(duplex="auto")
+
     def disconnect(self) -> None:
         # Nullify the variables
         self.remote_device = None
