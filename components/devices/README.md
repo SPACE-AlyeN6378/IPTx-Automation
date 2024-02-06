@@ -2,7 +2,8 @@
 
 The `NetworkDevice` class serves as a versatile and central node within a network topology, designed to encapsulate the functionality of various network entities such as switches, routers, or endpoints like servers and PCs. This class encompasses key attributes and methods essential for managing and orchestrating communication within a network, offering a unified interface for developers to interact with diverse network elements. Whether it's routing data, managing connections, or handling specific device functionalities, the "Network Device" class provides a flexible and scalable foundation for building and simulating complex network topologies in a comprehensive and efficient manner.
 
-> **NOTE**: This, again, is just the base model and will not be used in the main project, but for debugging purposes.
+> [!NOTE] 
+> This, again, is just the base model and will not be used in the main project, but for debugging purposes.
 
 As obvious, some of the derived network devices that is used in the project are:
 - Routers (*can be used as endpoints too*)
