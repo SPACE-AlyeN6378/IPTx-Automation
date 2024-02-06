@@ -39,6 +39,6 @@ As obvious, some of the derived network devices that is used in the project are:
 | [`add_interface()`](./network_device.py#L131)    | Variable number of `new_interfaces: PhysicalInterface \| Loopback`                            | Adds new interfaces specified in the parameters        | None              |
 | [`remove_interface()`](./network_device.py#L160) | Port number or the interface itself `interface_or_port: str \| PhysicalInterface \| Loopback` | Removes an interface by its port number                | Removed interface |
 
-### Configuration Script Generator [`send_script()`](./network_device.py#L175)
+### Configuration Script Generator [`send_script()`](./network_device.py#L174)
 
 This generates a complete Cisco command and sends it to the networking devices. (For now, it copy/pastes using `pyperclip` library)
