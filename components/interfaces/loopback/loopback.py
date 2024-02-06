@@ -9,8 +9,14 @@ class Loopback(Interface):
         self._cisco_commands.update({
             "p2p_cmd": ""
         })
+        self.ospf_area = 0
 
+    # Enable/disable OSPF point-to-point
     def set_ospf_p2p(self, enable: bool) -> None:
         self.p2p = enable
         no_ = "" if enable else "no "
         self._cisco_commands["p2p_cmd"] = f"{no_}ip ospf network point-to-point"
+
+    # Enable/disable OSPF point-to-point
+    def advertise_ospf(self):
+        pass
