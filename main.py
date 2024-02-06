@@ -1,7 +1,5 @@
-from components.interfaces.loopback import Loopback
-from list_helper import next_number
+from components.interfaces.loopback.loopback import Loopback
 from components.devices.network_device import NetworkDevice
-from components.topologies.topology import Topology
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
 # Create instances of the Person class
