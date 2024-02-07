@@ -84,16 +84,16 @@ class NetworkDevice:
         raise NotFoundError(f"ERROR in {self.hostname}: Loopbacks with ID {loopback_id} is not included in "
                             f"this network device")
 
-    def all_phys_interfaces(self):
+    def all_phys_interfaces(self) -> List[PhysicalInterface]:
         return self.__phys_interfaces
 
-    def all_loopbacks(self):
+    def all_loopbacks(self) -> List[Loopback]:
         return self.__loopbacks
 
-    def all_interfaces(self):
+    def all_interfaces(self) -> List[PhysicalInterface | Loopback]:
         return self.__phys_interfaces + self.__loopbacks
 
-    def remote_device(self, port):
+    def remote_device(self, port) -> NetworkDevice:
         device = self.interface(port).remote_device
         if device is None:
             print(
@@ -101,7 +101,7 @@ class NetworkDevice:
 
         return device
 
-    def remote_port(self, port):
+    def remote_port(self, port) -> str:
         port_ = self.interface(port).remote_port
         if port_ is None:
             print(

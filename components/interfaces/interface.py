@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+from ipaddress import IPv4Address
 from typing import Union, Tuple, List, Iterable
 
 
@@ -58,7 +59,7 @@ class Interface:
 
         # Cisco IOS commands
         self._cisco_commands = {
-            "ip address": f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""
+            "ip address": [f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""]
         }
 
     # Stringify
@@ -86,16 +87,16 @@ class Interface:
         if cidr:
             self.ip_address, self.subnet_mask = Interface.get_ip_and_subnet(cidr)
 
-        # Generate cisco command
-        self._cisco_commands["ip address"] = f"ip address {self.ip_address} {self.subnet_mask}"
+            # Generate cisco command
+            self._cisco_commands["ip address"] = [f"ip address {self.ip_address} {self.subnet_mask}"]
 
     # Network Address
-    def network_address(self) -> None:
+    def network_address(self) -> IPv4Address:
         ip_address = ipaddress.IPv4Network(f"{self.ip_address}/{self.subnet_mask}", strict=False)
         return ip_address.network_address
 
     # Wildcard Mask
-    def wildcard_mask(self) -> None:
+    def wildcard_mask(self) -> str:
         octets = [int(octet) for octet in self.subnet_mask.split('.')]
         wildcard_mask_list = [255 - octet for octet in octets]
         wildcard_mask = '.'.join(map(str, wildcard_mask_list))
@@ -106,15 +107,20 @@ class Interface:
     # Goes to router interface
 
     # Generates a block of commands
-    def generate_command_block(self) -> List[str]:
-        ios_commands = [f"interface {str(self)}"]
+    def generate_command_block(self):
+        # Gets a new list of commands
+        command_block = [f"interface {str(self)}"]
 
-        if self._cisco_commands["ip address"]:
-            ios_commands.append(self._cisco_commands["ip address"])
-            self._cisco_commands["ip address"] = ""
+        for attr in self._cisco_commands.keys():
+            # Check if each line of the command exists
+            if self._cisco_commands[attr]:
+                # Add to command_block and clear the string
+                command_block.extend(self._cisco_commands[attr])
+                self._cisco_commands[attr].clear()
 
-        if len(ios_commands) > 1:
-            ios_commands.append("exit")
-            return ios_commands
+        # If the generated command exists, return the full list of commands, otherwise return an empty list
+        if len(command_block) > 1:
+            command_block.append("exit")
+            return command_block
 
         return []

@@ -36,10 +36,10 @@ class PhysicalInterface(Interface):
 
         # Cisco commands
         self._cisco_commands.update({
-            "shutdown": "shutdown",
-            "bandwidth": f"bandwidth {self.bandwidth}",
-            "mtu": f"mtu {self.mtu}",
-            "duplex": f"duplex {self.duplex}"
+            "shutdown": ["shutdown"],
+            "bandwidth": [f"bandwidth {self.bandwidth}"],
+            "mtu": [f"mtu {self.mtu}"],
+            "duplex": [f"duplex {self.duplex}"]
         })
 
     # Check if the interface type is actually a physical interface (e.g. Ethernet)
@@ -57,7 +57,7 @@ class PhysicalInterface(Interface):
 
         if mtu:
             self.mtu = mtu
-            self._cisco_commands["mtu"] = f"mtu {self.mtu}"
+            self._cisco_commands["mtu"] = [f"mtu {self.mtu}"]
 
         if bandwidth:
             """
@@ -70,14 +70,14 @@ class PhysicalInterface(Interface):
             else:
                 self.bandwidth = bandwidth
 
-            self._cisco_commands["bandwidth"] = f"bandwidth {self.bandwidth}"
+            self._cisco_commands["bandwidth"] = [f"bandwidth {self.bandwidth}"]
 
         if duplex:
             if duplex not in ["auto", "full", "half"]:
                 raise ValueError(f"ERROR: Inappropriate configuration for duplex \'{duplex}\'")
             
             self.duplex = duplex
-            self._cisco_commands["duplex"] = f"duplex {self.duplex}"
+            self._cisco_commands["duplex"] = [f"duplex {self.duplex}"]
 
     # Shuts down the interface
     def shutdown(self) -> None:
@@ -85,7 +85,7 @@ class PhysicalInterface(Interface):
             print(f"{Fore.MAGENTA}DENIED: This connector is already shut down.{Style.RESET_ALL}")
         else:
             self.shutdown_state = True
-            self._cisco_commands["shutdown"] = "shutdown"
+            self._cisco_commands["shutdown"] = ["shutdown"]
 
     # Releases the interface
     def release(self) -> None:
@@ -97,7 +97,7 @@ class PhysicalInterface(Interface):
 
             else:
                 self.shutdown_state = False
-                self._cisco_commands["shutdown"] = "no shutdown"
+                self._cisco_commands["shutdown"] = ["no shutdown"]
 
     """
     Description: Establishes a connection. It basically sets the remote device 
@@ -155,24 +155,4 @@ class PhysicalInterface(Interface):
                 and self.remote_device == other.remote_device
 
         return False
-    
-    # Generates a block of commands
-    def generate_command_block(self):
-        # Gets a new list of commands
-        command_block = [f"interface {self.__str__()}"]
-        
-        for attr in self._cisco_commands.keys():
-            # Check if each line of the command exists
-            if self._cisco_commands[attr]:
-                # Add to command_block and clear the string
-                command_block.append(self._cisco_commands[attr])
-                self._cisco_commands[attr] = ""
-
-        # If the generated command exists, return the full list of commands, otherwise return an empty list
-        if len(command_block) > 1:
-            command_block.append("exit")
-            return command_block
-        
-        return []
-
 
