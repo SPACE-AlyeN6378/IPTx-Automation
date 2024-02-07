@@ -104,11 +104,6 @@ class Interface:
 
     # Generate Cisco command to advertise OSPF route
     # Goes to router interface
-    # def ospf_advertise(self, area=0):
-    #     if self.ip_address and self.subnet_mask:
-    #         return [f"network {self.network_address()} {self.wildcard_mask()} area {area}"]
-    #     else:
-    #         raise NotImplementedError("The IP address and subnet mask are missing")
 
     # Generates a block of commands
     def generate_command_block(self) -> List[str]:

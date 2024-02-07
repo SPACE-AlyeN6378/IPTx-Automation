@@ -69,7 +69,7 @@ class NetworkDevice:
                 return interface
 
         # Raise an error if it doesn't exist
-        raise NotFoundError(f"ERROR in {self.hostname}: Interface with port {port} is not included in "
+        raise NotFoundError(f"ERROR in {str(self)}: Interface with port {port} is not included in "
                             f"this network device")
 
     def interface_range(self, *ports: str) -> List[PhysicalInterface]:

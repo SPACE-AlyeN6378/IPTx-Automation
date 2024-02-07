@@ -1,8 +1,11 @@
-from typing import List, Union, Any
+from typing import List, Union, TYPE_CHECKING
 from components.interfaces.interface import Interface
-import components.nodes.network_device as device
+# import components.devices.network_device as device
 from colorama import Fore, Style
 from enum import Enum
+
+if TYPE_CHECKING:
+    from components.devices.network_device import NetworkDevice
 
 
 class Mode(Enum):  # ENUM for switchport modes
@@ -103,9 +106,12 @@ class PhysicalInterface(Interface):
     Parameters: Network device, its port and the new bandwidth. (In case if an ethernet cable of lower bandwidth is used, 
     the 'new_bandwidth' parameter is used to reduce the bandwidth)
     """
-    def connect_to(self, device: device.NetworkDevice, remote_port: str, new_bandwidth: int = None) -> None:
+    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, new_bandwidth: int = None) -> None:
         # Assign the network device and port number
-        self.remote_device = device
+        # if isinstance(remote_device, device.NetworkDevice):
+        #     raise TypeError(f"ERROR: This object '{str(remote_device)}' is not a network device")
+
+        self.remote_device = remote_device
         self.remote_port = remote_port
 
         # Release the interface
