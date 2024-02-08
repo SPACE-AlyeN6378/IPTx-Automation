@@ -32,6 +32,7 @@ class RouterInterface(PhysicalInterface):
 
         self.__ospf_priority = priority
         self._cisco_commands["priority"] = [f"ip ospf priority {priority}"]
+
     def ip_ospf_config(self, p2p: bool = None, priority: bool = None, md5_auth_pwd: str = None) -> None:
         # This interface should not be in EGP mode
         if not self.egp:
