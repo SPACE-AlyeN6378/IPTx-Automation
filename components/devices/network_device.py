@@ -48,7 +48,7 @@ class NetworkDevice:
 
     # Stringify
     def __str__(self):
-        return f"Device {self.hostname}"
+        return f"Device '{self.hostname}'"
 
     # The equal and hashable operator are for identification
     def __eq__(self, other):

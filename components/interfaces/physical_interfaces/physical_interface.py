@@ -21,6 +21,7 @@ class PhysicalInterface(Interface):
     def __init__(self, int_type: str, port: Union[str, int], cidr: str = None) -> None:
 
         super().__init__(int_type, port, cidr)
+        self.description = "UNCONNECTED"
         self.validate_interface_type()
 
         # New attributes
@@ -36,6 +37,7 @@ class PhysicalInterface(Interface):
 
         # Cisco commands
         self._cisco_commands.update({
+            "description": [f"description \"{self.description}\""],
             "shutdown": ["shutdown"],
             "bandwidth": [f"bandwidth {self.bandwidth}"],
             "mtu": [f"mtu {self.mtu}"],
@@ -51,9 +53,9 @@ class PhysicalInterface(Interface):
                 f"ERROR: Invalid interface type '{self.int_type}' - Please use the following "
                 f"interfaces {', '.join(default_types)}")
 
-    def config(self, cidr: str = None, bandwidth: int = None, mtu: int = None,
+    def config(self, cidr: str = None, description: str = None, bandwidth: int = None, mtu: int = None,
                duplex: str = None) -> None:
-        super().config(cidr)
+        super().config(cidr, description)
 
         if mtu:
             self.mtu = mtu
@@ -61,7 +63,7 @@ class PhysicalInterface(Interface):
 
         if bandwidth:
             """
-            If the bandwidth exceeds the maximum permittable bandwidth, then it caps it down to the given maximum
+            If the bandwidth exceeds the maximum allowable bandwidth, then it caps it down to the given maximum
             """
             if bandwidth > self.max_bandwidth:
                 print(f"{Fore.YELLOW}WARNING: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
@@ -107,12 +109,13 @@ class PhysicalInterface(Interface):
     the 'new_bandwidth' parameter is used to reduce the bandwidth)
     """
     def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, new_bandwidth: int = None) -> None:
-        # Assign the network device and port number
-        # if isinstance(remote_device, device.NetworkDevice):
-        #     raise TypeError(f"ERROR: This object '{str(remote_device)}' is not a network device")
 
+        # Assign the network device and port number
         self.remote_device = remote_device
         self.remote_port = remote_port
+
+        # Change the description
+        self.config(description=f"Connected to >>> {self.remote_device} >>> Port {self.remote_port}")
 
         # Release the interface
         self.release()
@@ -138,6 +141,9 @@ class PhysicalInterface(Interface):
         # Nullify the variables
         self.remote_device = None
         self.remote_port = None
+
+        # Change the description
+        self.config(description=f"UNCONNECTED")
 
         # Set the bandwidth to default
         self.max_bandwidth = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]

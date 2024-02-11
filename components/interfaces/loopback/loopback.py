@@ -5,9 +5,10 @@ from components.interfaces.interface import Interface
 
 class Loopback(Interface):
 
-    def __init__(self, cidr: str, port: int = 0) -> None:
-        super().__init__(int_type="Loopback", port=port, cidr=cidr)
+    def __init__(self, cidr: str, loopback_id: int = 0, description: str = None) -> None:
+        super().__init__(int_type="Loopback", port=loopback_id, cidr=cidr)
 
+        self.config(description=description)
         self.ospf_area = 0
         self.allow_hellos = False    # Allow hello packets to be sent at fixed intervals
 
@@ -19,12 +20,15 @@ class Loopback(Interface):
         self.__ospf_xr_commands = []
 
     # OSPF Initialization
-    def ospf_advertise(self, process_id: int, area: int = None, for_xr: bool = False) -> None:
+    def ospf_config(self, process_id: int, area: int = None, allow_hellos: bool = None, for_xr: bool = False) -> None:
         if not (self.ip_address and self.subnet_mask):
             raise NotImplementedError("The IP address and subnet mask are missing")
 
-        if area:    # If area number needs to be changed
+        if area is not None:    # If area number needs to be changed
             self.ospf_area = area
+
+        if allow_hellos is not None:    # If you want to allow hello packets to be sent
+            self.allow_hellos = allow_hellos
 
         if for_xr:  # For Cisco XR routers
             if self.allow_hellos:
@@ -33,15 +37,17 @@ class Loopback(Interface):
                 self.__ospf_xr_commands = ["passive enable"]
         else:
             self._cisco_commands["ospf"] = [
-                f"ip ospf {process_id} {self.ospf_area}"
+                f"ip ospf {process_id} area {self.ospf_area}"
             ]
 
     def get_ospf_xr_commands(self) -> List[str]:
         if self.__ospf_xr_commands:
-            cisco_commands = [f"interface {str(self)}"]
-            cisco_commands.extend(self.__ospf_xr_commands)
-            cisco_commands.append("exit")
-            return cisco_commands
+            commands = [f"interface {str(self)}"]
+            commands.extend(self.__ospf_xr_commands)
+            commands.append("exit")
+
+            self.__ospf_xr_commands.clear()
+            return commands
         else:
             return []
 

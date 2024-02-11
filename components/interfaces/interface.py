@@ -55,11 +55,13 @@ class Interface:
         self.int_type = int_type
         self.port = port
         self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
+        self.description = ""
         Interface.validate_port(self.int_type, self.port)  # Check if the port number is of the valid format
 
         # Cisco IOS commands
         self._cisco_commands = {
-            "ip address": [f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""]
+            "ip address": [f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""],
+            "description": []
         }
 
     # Stringify
@@ -82,13 +84,17 @@ class Interface:
             and self.ip_address == item.ip_address and self.subnet_mask == item.subnet_mask
 
     # Configure the interface and generate Cisco command to be sent
-    def config(self, cidr: str = None) -> None:
+    def config(self, cidr: str = None, description: str = None) -> None:
         # Change a couple of attributes
         if cidr:
             self.ip_address, self.subnet_mask = Interface.get_ip_and_subnet(cidr)
 
             # Generate cisco command
             self._cisco_commands["ip address"] = [f"ip address {self.ip_address} {self.subnet_mask}"]
+
+        if description:
+            self.description = description
+            self._cisco_commands["description"] = [f"description \"{self.description}\""]
 
     # Network Address
     def network_address(self) -> IPv4Address:
