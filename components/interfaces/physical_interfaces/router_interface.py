@@ -18,7 +18,6 @@ class RouterInterface(PhysicalInterface):
         self.ospf_area = 0
         self.ospf_p2p = True
         self.ospf_priority = 1
-        self.md5_auth = False
         self.__md5_passwords = dict()
 
         self._cisco_commands.update({
@@ -53,18 +52,15 @@ class RouterInterface(PhysicalInterface):
                     self.__more_ospf_commands["ospf_p2p"] = ["network point-to-multipoint"]
 
             if priority is not None:
-                if not (0 <= priority <= 255):
-                    raise ValueError(f"Invalid priority number '{priority}': Must be between 0 and 255")
+                if not self.ospf_p2p:
+                    if not (0 <= priority <= 255):
+                        raise ValueError(f"Invalid priority number '{priority}': Must be between 0 and 255")
 
-                self.ospf_priority = priority
-                self.__more_ospf_commands["priority"] = [f"priority {priority}"]
+                    self.ospf_priority = priority
+                    self.__more_ospf_commands["priority"] = [f"priority {priority}"]
 
-            if md5_auth_pwd is not None:
-                if not md5_auth_pwd.strip():
-                    raise ValueError("ERROR: Cannot accept empty stringed passwords")
-
-                self.__md5_auth_pwd = md5_auth_pwd
-                self._cisco_commands["md5_auth"].append()
+                else:
+                    print(f"{Fore.MAGENTA}DENIED:{Fore}")
 
         else:
             print(f"{Fore.MAGENTA}DENIED: This interface is for inter-autonomous routing{Style.RESET_ALL}")
