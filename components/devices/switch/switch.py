@@ -1,7 +1,7 @@
 from __future__ import annotations
-from components.nodes.network_device import NetworkDevice
+from components.devices.network_device import NetworkDevice
 from components.interfaces.vlan import VLAN
-from components.nodes.notfound_error import NotFoundError
+from components.devices.notfound_error import NotFoundError
 from typing import Union, Set, Iterable, List
 from enum import Enum
 from colorama import Fore, Style
@@ -268,6 +268,7 @@ class SwitchInterface(PhysicalInterface):
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
 
 class Switch(NetworkDevice):
 

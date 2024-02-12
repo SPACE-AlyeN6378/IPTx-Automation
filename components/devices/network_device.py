@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Iterable
+from typing import List, Iterable, Any
+
+
 from iptx_utils import NetworkError
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from components.interfaces.loopback.loopback import Loopback
@@ -44,7 +46,6 @@ class NetworkDevice:
 
         # Cisco commands
         self._cisco_commands = {"hostname": [self.hostname]}
-        self.__hostname_cmd = f"hostname {self.hostname}"
 
     # Stringify
     def __str__(self):
@@ -63,7 +64,7 @@ class NetworkDevice:
     def id(self):
         return self.__device_id
 
-    def interface(self, port: str) -> PhysicalInterface | None:
+    def interface(self, port: str) -> Any:
         for interface in self.__phys_interfaces:
             if port == interface.port:
                 return interface
@@ -72,7 +73,7 @@ class NetworkDevice:
         raise NotFoundError(f"ERROR in {str(self)}: Interface with port {port} is not included in "
                             f"this network device")
 
-    def interface_range(self, *ports: str) -> List[PhysicalInterface]:
+    def interface_range(self, *ports: str) -> List[Any]:
         return [self.interface(port) for port in ports]
 
     def loopback(self, loopback_id: int) -> Loopback:
@@ -84,13 +85,13 @@ class NetworkDevice:
         raise NotFoundError(f"ERROR in {self.hostname}: Loopbacks with ID {loopback_id} is not included in "
                             f"this network device")
 
-    def all_phys_interfaces(self) -> List[PhysicalInterface]:
+    def all_phys_interfaces(self) -> List[Any]:
         return self.__phys_interfaces
 
     def all_loopbacks(self) -> List[Loopback]:
         return self.__loopbacks
 
-    def all_interfaces(self) -> List[PhysicalInterface | Loopback]:
+    def all_interfaces(self) -> List[Any]:
         return self.__phys_interfaces + self.__loopbacks
 
     def remote_device(self, port) -> NetworkDevice:
@@ -125,7 +126,7 @@ class NetworkDevice:
         self.hostname = new_hostname
 
         # Update the dictionary of cisco commands
-        self.__cisco_commands["hostname"] = [f"hostname {self.hostname}"]
+        self._cisco_commands["hostname"] = [f"hostname {self.hostname}"]
 
     # Adds the interfaces
     def add_interface(self, *new_interfaces: PhysicalInterface | Loopback) -> None:
@@ -171,16 +172,17 @@ class NetworkDevice:
         return interface
 
     # Generate a complete configuration script
-    def send_script(self) -> List[str]:
+    def send_script(self) -> None:
         # Start with 'configure terminal'
         script = ["configure terminal"]
 
         # Iterate through each cisco command by key
         for attr in self._cisco_commands.keys():
-            # Add the cisco commands to the script and clear it
+            # Add the cisco commands to the script and clear it, so that it doesn't have to be
+            # added again, until any of the attributes have changed
             script.extend(self._cisco_commands[attr])
-            self._cisco_commands[attr].clear()  # So that it doesn't have to added again, until
-            # any of the attributes have changed
+            self._cisco_commands[attr].clear()
+
         """
         NOTE: For this configuration, only the hostname configuration is added. There are more lines of code in routers
         and switches.
@@ -190,4 +192,4 @@ class NetworkDevice:
             script.extend(interface.generate_command_block())
 
         script.append("end")
-        return script
+        NetworkDevice.print_script(script, Fore.CYAN)

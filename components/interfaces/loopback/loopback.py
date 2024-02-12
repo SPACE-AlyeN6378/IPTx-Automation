@@ -11,6 +11,7 @@ class Loopback(Interface):
         self.config(description=description)
         self.ospf_area = 0
         self.allow_hellos = False    # Allow hello packets to be sent at fixed intervals
+        self.xr_mode = False
 
         self._cisco_commands.update({
             "ospf": []
@@ -20,7 +21,7 @@ class Loopback(Interface):
         self.__ospf_xr_commands = []
 
     # OSPF Initialization
-    def ospf_config(self, process_id: int, area: int = None, allow_hellos: bool = None, for_xr: bool = False) -> None:
+    def ospf_config(self, process_id: int, area: int = None, allow_hellos: bool = None) -> None:
         if not (self.ip_address and self.subnet_mask):
             raise NotImplementedError("The IP address and subnet mask are missing")
 
@@ -30,7 +31,7 @@ class Loopback(Interface):
         if allow_hellos is not None:    # If you want to allow hello packets to be sent
             self.allow_hellos = allow_hellos
 
-        if for_xr:  # For Cisco XR routers
+        if self.xr_mode:  # For Cisco XR routers
             if self.allow_hellos:
                 self.__ospf_xr_commands = ["passive disable", "network point-to-multipoint"]
             else:
