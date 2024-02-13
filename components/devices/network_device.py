@@ -6,7 +6,7 @@ from typing import List, Iterable, Any
 from iptx_utils import NetworkError
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from components.interfaces.loopback.loopback import Loopback
-from iptx_utils import NotFoundError, next_number
+from iptx_utils import NotFoundError, next_number, CommandsDict
 from colorama import Style, Fore
 import re
 
@@ -22,11 +22,15 @@ class NetworkDevice:
     # Print out the script
     @staticmethod
     def print_script(commands: Iterable[str], color=Fore.WHITE):
-        for command in commands:
-            print(f"{color}{command}{Style.RESET_ALL}")
+        for command_line in commands:
+
+            print(f"{color}{command_line}{Style.RESET_ALL}")
+
+            if command_line in ["configure terminal", "exit"] or "hostname" in command_line:
+                print(f'{color}!{Style.RESET_ALL}')
 
     # Constructor
-    def __init__(self, device_id: str | int = None, hostname: str = "NetworkDevice",
+    def __init__(self, device_id: str = None, hostname: str = "NetworkDevice",
                  interfaces: Iterable[PhysicalInterface] = None) -> None:
 
         # Hostname validation
@@ -38,14 +42,14 @@ class NetworkDevice:
             interfaces = []
 
         # Attributes
-        self.__device_id = device_id
-        self.hostname = hostname
-        self.__phys_interfaces = []
-        self.__loopbacks = []
+        self.__device_id: str = device_id
+        self.hostname: str = hostname
+        self.__phys_interfaces: List[PhysicalInterface] = []
+        self.__loopbacks: List[Loopback] = []
         self.add_interface(*interfaces)
 
         # Cisco commands
-        self._cisco_commands = {"hostname": [self.hostname]}
+        self._basic_commands: CommandsDict = {"hostname": [f"hostname {self.hostname}"]}
 
     # Stringify
     def __str__(self):
@@ -54,11 +58,10 @@ class NetworkDevice:
     # The equal and hashable operator are for identification
     def __eq__(self, other):
         if isinstance(other, NetworkDevice):
-            return self.__device_id == other.__device_id \
-                and self.hostname == other.hostname
+            return self.__device_id == other.__device_id
 
     def __hash__(self):
-        return hash((self.__device_id, self.hostname))
+        return hash(self.__device_id)
 
     # Getters ---------------------------------------------------------------
     def id(self):
@@ -74,6 +77,9 @@ class NetworkDevice:
                             f"this network device")
 
     def interface_range(self, *ports: str) -> List[Any]:
+        if len(ports) > len(set(ports)):
+            raise IndexError("All the interface ports need to be unique")
+
         return [self.interface(port) for port in ports]
 
     def loopback(self, loopback_id: int) -> Loopback:
@@ -93,6 +99,9 @@ class NetworkDevice:
 
     def all_interfaces(self) -> List[Any]:
         return self.__phys_interfaces + self.__loopbacks
+
+    def get_max_bandwidth(self) -> int:
+        return max(interface.bandwidth for interface in self.all_phys_interfaces())
 
     def remote_device(self, port) -> NetworkDevice:
         device = self.interface(port).remote_device
@@ -126,7 +135,7 @@ class NetworkDevice:
         self.hostname = new_hostname
 
         # Update the dictionary of cisco commands
-        self._cisco_commands["hostname"] = [f"hostname {self.hostname}"]
+        self._basic_commands["hostname"] = [f"hostname {self.hostname}"]
 
     # Adds the interfaces
     def add_interface(self, *new_interfaces: PhysicalInterface | Loopback) -> None:
@@ -177,11 +186,11 @@ class NetworkDevice:
         script = ["configure terminal"]
 
         # Iterate through each cisco command by key
-        for attr in self._cisco_commands.keys():
+        for attr in self._basic_commands.keys():
             # Add the cisco commands to the script and clear it, so that it doesn't have to be
             # added again, until any of the attributes have changed
-            script.extend(self._cisco_commands[attr])
-            self._cisco_commands[attr].clear()
+            script.extend(self._basic_commands[attr])
+            self._basic_commands[attr].clear()
 
         """
         NOTE: For this configuration, only the hostname configuration is added. There are more lines of code in routers

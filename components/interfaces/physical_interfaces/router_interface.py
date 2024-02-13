@@ -6,6 +6,7 @@ from iptx_utils import NetworkError
 
 if TYPE_CHECKING:
     from components.devices.network_device import NetworkDevice
+    from components.devices.router.router import Router
 
 
 class RouterInterface(PhysicalInterface):
@@ -34,9 +35,8 @@ class RouterInterface(PhysicalInterface):
             "md5_auth": []
         }
 
-        if egp:
+        if not egp:
             self.__more_ospf_commands["network"] = ["network point-to-point"]
-
 
     # OSPF Configuration
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
@@ -63,7 +63,7 @@ class RouterInterface(PhysicalInterface):
                     self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
 
         else:
-            if process_id or area or p2p:  # If any of these parameters are included
+            if area or p2p:  # If any of these parameters are included
                 print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems, "
                       f"so OSPF cannot be configured{Style.RESET_ALL}")
 
@@ -115,7 +115,7 @@ class RouterInterface(PhysicalInterface):
             self.ospf_config()  # Configure as passive interface
 
     # Get the portion of the command block
-    def generate_command_block(self):
+    def generate_command_block(self) -> List[str]:
         if not self.xr_mode:
 
             if not self.egp:
@@ -137,11 +137,17 @@ class RouterInterface(PhysicalInterface):
 
     # Generate OSPF XR advertisement command
     def generate_ospf_xr_commands(self) -> List[str]:
+        # First, generate the command
         commands = [line for lines in self.__more_ospf_commands.values() for line in lines]
+        commands.insert(0, f"interface {str(self)}")
+        commands.append("exit")
+
+        # Clear the dictionary of commands
         self.__more_ospf_commands = {
             "network": [],
             "passive": [],
             "priority": [],
             "md5_auth": []
         }
+
         return commands

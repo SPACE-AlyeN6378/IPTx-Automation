@@ -26,7 +26,7 @@ class PhysicalInterface(Interface):
 
         # New attributes
         self.shutdown_state = True
-        self.max_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]     # Initial assumption about the bandwidth
+        self.ul_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]     # Upper limit bandwidth
         self.bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
         self.mtu = 1500
         self.duplex = "auto"
@@ -65,10 +65,10 @@ class PhysicalInterface(Interface):
             """
             If the bandwidth exceeds the maximum allowable bandwidth, then it caps it down to the given maximum
             """
-            if bandwidth > self.max_bandwidth:
+            if bandwidth > self.ul_bandwidth:
                 print(f"{Fore.YELLOW}WARNING: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
-                      f"bandwidth {self.max_bandwidth} bps. Capping it to the given maximum...{Style.RESET_ALL}")
-                self.bandwidth = self.max_bandwidth
+                      f"bandwidth {self.ul_bandwidth} bps. Capping it to the given maximum...{Style.RESET_ALL}")
+                self.bandwidth = self.ul_bandwidth
             else:
                 self.bandwidth = bandwidth
 
@@ -122,16 +122,19 @@ class PhysicalInterface(Interface):
 
         # Reduce the bandwidth, maximize the MTU and set the duplex to auto if necessary
         remote_int_bandwidth = self.remote_device.interface(remote_port).bandwidth  # Bandwidth on the remote device
+
         if remote_int_bandwidth < self.bandwidth:   # If the bandwidth at the remote port is lower
-            self.max_bandwidth = remote_int_bandwidth   # Set the maximum bandwidth
-            if new_bandwidth:
+            self.ul_bandwidth = remote_int_bandwidth   # Set the maximum bandwidth
+            self.config(bandwidth=self.ul_bandwidth)
+
+        if new_bandwidth:
+            if new_bandwidth < self.bandwidth:
                 self.config(bandwidth=new_bandwidth)
-            else:
-                self.config(bandwidth=self.max_bandwidth)
+
 
         remote_int_mtu = self.remote_device.interface(remote_port).mtu
         if remote_int_mtu > self.mtu:  # If the MTU at the remote port is higher
-            self.config(bandwidth=remote_int_mtu)
+            self.config(mtu=remote_int_mtu)
 
         remote_int_duplex = self.remote_device.interface(remote_port)
         if remote_int_duplex != self.duplex and self.duplex != "auto" and remote_int_duplex != "auto":
@@ -146,7 +149,7 @@ class PhysicalInterface(Interface):
         self.config(description=f"UNCONNECTED")
 
         # Set the bandwidth to default
-        self.max_bandwidth = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]
+        self.ul_bandwidth = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]
         self.shutdown()
 
     def __eq__(self, other):

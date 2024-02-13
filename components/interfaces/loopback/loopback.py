@@ -41,7 +41,7 @@ class Loopback(Interface):
                 f"ip ospf {process_id} area {self.ospf_area}"
             ]
 
-    def get_ospf_xr_commands(self) -> List[str]:
+    def generate_ospf_xr_commands(self) -> List[str]:
         if self.__ospf_xr_commands:
             commands = [f"interface {str(self)}"]
             commands.extend(self.__ospf_xr_commands)

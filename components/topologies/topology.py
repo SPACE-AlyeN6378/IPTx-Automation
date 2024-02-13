@@ -2,7 +2,7 @@ from typing import Iterable, List, Any
 
 import networkx as nx
 import matplotlib.pyplot as plt
-from components.nodes.switch import Switch, SwitchInterface
+from components.devices.switch import Switch, SwitchInterface
 from components.nodes.router import Router
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from iptx_utils import NetworkError, NotFoundError
@@ -27,12 +27,12 @@ class Topology:
     def get_all_switches(self) -> List[Switch]:
         return [node for node in self.__graph.nodes() if isinstance(node, Switch)]
 
-    def __getitem__(self, device_id_or_name: int | str) -> Switch | Router | None:
+    def __getitem__(self, device_id: str) -> Switch | Router:
         for device in self.__graph.nodes():
-            if device_id_or_name in [device.id(), device.hostname]:
+            if device_id == device.id():
                 return device
 
-        raise NotFoundError(f"ERROR in AS_NUM {self.as_number}: Device '{device_id_or_name}' "
+        raise NotFoundError(f"ERROR in AS_NUM {self.as_number}: Device with ID '{device_id}' "
                             f"invalid or not found")
 
     def add_switch(self, switch: Switch) -> None:
@@ -56,7 +56,7 @@ class Topology:
 
         if self.__graph.has_node(router):
             raise NetworkError(f"ERROR in AS_NUM {self.as_number}: There's already a device with identical "
-                               f"hostname or ID. Please try a different name.")
+                               f"ID {router.id()}. Please try a different one.")
 
         self.__graph.add_node(router)
 
@@ -67,7 +67,7 @@ class Topology:
             elif isinstance(device, Switch):
                 self.add_switch(device)
             else:
-                raise NetworkError(f"ERROR in AS_NUM {self.as_number}: Invalid device type {str(device)}")
+                raise TypeError(f"ERROR in AS_NUM {self.as_number}: Invalid device type {str(device)}")
 
     def remove_device(self, device: Switch | Router) -> None:
         if not self.__graph.has_node(device):
@@ -76,7 +76,7 @@ class Topology:
 
         self.__graph.remove_node(device)
 
-    def remove_device_by_id(self, device_id: int | str):
+    def remove_device_by_id(self, device_id: int):
         for device in self.get_all_nodes():
             if device_id == device.id():
                 self.__graph.remove_node(device)
@@ -84,6 +84,7 @@ class Topology:
 
     def connect_devices(self, device_id1: str | int, port1: str, device_id2: str | int, port2: str) -> None:
         ethernet_types = list(PhysicalInterface.BANDWIDTHS.keys())[1:5]
+
         if not (self[device_id1][port1].int_type in ethernet_types
                 and self[device_id2][port2].int_type in ethernet_types):
 

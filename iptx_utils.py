@@ -1,5 +1,11 @@
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Dict, List
 import components.interfaces.interface as inf
+import datetime
+from colorama import Fore, Style
+
+# CUSTOM TYPES
+CommandsDict = Dict[str, List[str]]
+
 
 # *** CUSTOM EXCEPTIONS ***
 class NetworkError(Exception):
@@ -83,3 +89,10 @@ def next_number(iterable: Iterable[int], starting_number=0):
             return num
     # Otherwise, return the missing number
     return max(iterable) + 1
+
+
+def print_log(text: str):
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"{Fore.BLUE}{formatted_datetime} | {text}{Style.RESET_ALL}")
+
