@@ -60,9 +60,12 @@ class Interface:
 
         # Cisco IOS commands
         self._cisco_commands = {
-            "ip address": [f"ip address {self.ip_address} {self.subnet_mask}" if self.ip_address is not None else ""],
+            "ip address": [],
             "description": []
         }
+
+        if self.ip_address is not None:
+            self._cisco_commands["ip address"].append(f"ip address {self.ip_address} {self.subnet_mask}")
 
     # Stringify
     def __str__(self):

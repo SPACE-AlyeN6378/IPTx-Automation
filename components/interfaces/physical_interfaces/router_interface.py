@@ -3,10 +3,10 @@ from typing import List, TYPE_CHECKING
 from components.devices.switch.switch import Switch
 from colorama import Fore, Style
 from iptx_utils import NetworkError
+import ipaddress
 
 if TYPE_CHECKING:
     from components.devices.network_device import NetworkDevice
-    from components.devices.router.router import Router
 
 
 class RouterInterface(PhysicalInterface):
@@ -37,6 +37,18 @@ class RouterInterface(PhysicalInterface):
 
         if not egp:
             self.__more_ospf_commands["network"] = ["network point-to-point"]
+
+    @staticmethod
+    def p2p_ip_addresses(network_address: str):
+
+        if network_address.split('.')[3] != '0':
+            raise ValueError("The last octet should to be 0 for an IPv4 Network Address")
+
+        network_address_obj = ipaddress.IPv4Network(f'{network_address}/30')
+        ip_int1, ip_int2 = int(network_address_obj[0]) + 1, int(network_address_obj[0]) + 2
+        ip1, ip2 = ipaddress.IPv4Address(ip_int1), ipaddress.IPv4Address(ip_int2)
+
+        return str(ip1)+'/30', str(ip2)+'/30'
 
     # OSPF Configuration
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
@@ -101,8 +113,8 @@ class RouterInterface(PhysicalInterface):
 
         self.__more_ospf_commands["md5_auth"].append(f"message-digest-key {key} md5 7 {password}")
 
-    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, new_bandwidth: int = None) -> None:
-        super().connect_to(remote_device, remote_port, new_bandwidth)
+    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
+        super().connect_to(remote_device, remote_port, cable_bandwidth)
 
         if isinstance(remote_device, Switch):
             if not self.egp:  # Don't connect to switches for EGP routing

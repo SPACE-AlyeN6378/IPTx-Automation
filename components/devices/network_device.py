@@ -6,7 +6,7 @@ from typing import List, Iterable, Any
 from iptx_utils import NetworkError
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from components.interfaces.loopback.loopback import Loopback
-from iptx_utils import NotFoundError, next_number, CommandsDict
+from iptx_utils import NotFoundError, smallest_missing_non_negative_integer, CommandsDict
 from colorama import Style, Fore
 import re
 
@@ -163,7 +163,7 @@ class NetworkDevice:
             # For Loopbacks
             elif isinstance(interface, Loopback):
                 ports = [inf.port for inf in self.__loopbacks]
-                interface.port = next_number(ports)
+                interface.port = smallest_missing_non_negative_integer(ports)
                 self.__loopbacks.append(interface)
 
     def remove_interface(self, interface_or_port: str | PhysicalInterface | Loopback) -> PhysicalInterface | Loopback:

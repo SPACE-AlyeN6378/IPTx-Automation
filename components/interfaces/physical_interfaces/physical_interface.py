@@ -108,7 +108,8 @@ class PhysicalInterface(Interface):
     Parameters: Network device, its port and the new bandwidth. (In case if an ethernet cable of lower bandwidth is used, 
     the 'new_bandwidth' parameter is used to reduce the bandwidth)
     """
-    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, new_bandwidth: int = None) -> None:
+    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
+        # NOTE: In case a cable of slower bandwidth is used, the 'cable_bandwidth' parameter can be used
 
         # Assign the network device and port number
         self.remote_device = remote_device
@@ -120,22 +121,28 @@ class PhysicalInterface(Interface):
         # Release the interface
         self.release()
 
-        # Reduce the bandwidth, maximize the MTU and set the duplex to auto if necessary
+        # Reduce the bandwidth
         remote_int_bandwidth = self.remote_device.interface(remote_port).bandwidth  # Bandwidth on the remote device
 
         if remote_int_bandwidth < self.bandwidth:   # If the bandwidth at the remote port is lower
             self.ul_bandwidth = remote_int_bandwidth   # Set the maximum bandwidth
             self.config(bandwidth=self.ul_bandwidth)
 
-        if new_bandwidth:
-            if new_bandwidth < self.bandwidth:
-                self.config(bandwidth=new_bandwidth)
+        if cable_bandwidth:
+            if cable_bandwidth <= self.bandwidth:
+                self.config(bandwidth=cable_bandwidth)
+            else:
+                print(f"{Fore.YELLOW}WARNING: The cable of faster bandwidth {cable_bandwidth} kBit/s will not be "
+                      f"incorporated. Using the interface bandwidth...{Style.RESET_ALL}")
 
+        # else, I'll assume you're using a cable of the same interface bandwidth as the one included
 
+        # Maximize the MTU
         remote_int_mtu = self.remote_device.interface(remote_port).mtu
         if remote_int_mtu > self.mtu:  # If the MTU at the remote port is higher
             self.config(mtu=remote_int_mtu)
 
+        # Set the duplex to 'auto' if necessary
         remote_int_duplex = self.remote_device.interface(remote_port)
         if remote_int_duplex != self.duplex and self.duplex != "auto" and remote_int_duplex != "auto":
             self.config(duplex="auto")
