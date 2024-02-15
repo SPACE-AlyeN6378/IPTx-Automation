@@ -77,7 +77,7 @@ def range_(start, end, step=1):
 
 
 # Getting the missing number
-def next_number(iterable: Iterable[int], starting_number=0):
+def smallest_missing_non_negative_integer(iterable: Iterable[int], starting_number: int = 0):
     # If the list is empty, you return the starting number
     if not iterable:
         return starting_number
