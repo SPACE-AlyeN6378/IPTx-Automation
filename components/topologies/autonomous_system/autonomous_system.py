@@ -17,7 +17,6 @@ class AutonomousSystem(Topology):
                         key: int = None, network_address: str = None, cable_bandwidth: int = None) -> None:
 
         super().connect_devices(device_id1, port1, device_id2, port2, key, cable_bandwidth)
-        print(key)
         # print(self._graph[self[device_id1]][self[device_id2]][self[device_id2]])
 
         if network_address:

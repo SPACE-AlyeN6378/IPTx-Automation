@@ -109,7 +109,11 @@ class PhysicalInterface(Interface):
     the 'new_bandwidth' parameter is used to reduce the bandwidth)
     """
     def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
-        # NOTE: In case a cable of slower bandwidth is used, the 'cable_bandwidth' parameter can be used
+        # NOTE: In case a cable of slower bandwidth is used, the 'cable_bandwidth' is used
+
+        # Check if the interface is already connected to another device
+        if self.remote_device is not None:
+            raise ConnectionError("This interface is already connected. Please try another one.")
 
         # Assign the network device and port number
         self.remote_device = remote_device

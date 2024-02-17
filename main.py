@@ -60,8 +60,8 @@ my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2"
                             network_address="10.0.52.0", key=12232)
 
 
-for obj in my_topology.get_link(12232):
-    print(obj)
+for i in my_topology.get_link_by_nodes("10.255.255.1", "10.255.255.2"):
+    print(i)
 # my_topology.get_device("10.255.255.3").send_script()
 #
 # my_router.set_ospf_area(2, "0/0/3")
