@@ -1,8 +1,8 @@
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Dict
 from components.devices.switch.switch import Switch
 from colorama import Fore, Style
-from iptx_utils import NetworkError
+from iptx_utils import NetworkError, print_log
 import ipaddress
 
 if TYPE_CHECKING:
@@ -12,19 +12,25 @@ if TYPE_CHECKING:
 class RouterInterface(PhysicalInterface):
     def __init__(self, int_type: str, port: str | int, cidr: str = None, egp: bool = False) -> None:
         super().__init__(int_type, port, cidr)
-        self.xr_mode = False
-        self.egp = egp
+
+        # Permanent data types
+        self.__xr_mode: bool = False
+        self.egp: bool = egp
 
         # OSPF Attributes
-        self.ospf_process_id = None
-        self.ospf_area = 0
-        self.ospf_p2p = True
-        self.ospf_priority = 1
-        self.__md5_auth_enabled = False
-        self.__md5_passwords = dict()
+        self.ospf_process_id: int = 0
+        self.ospf_area: int = 0
+        self.ospf_p2p: bool = True
+        self.ospf_priority: int = 1
+        self.__md5_auth_enabled: bool = False
+        self.__md5_passwords: Dict[int, str] = dict()
+
+        # MPLS Attributes
+        self.__mpls_enabled: bool = False
 
         self._cisco_commands.update({
-            "ospf": []
+            "ospf": [],
+            "mpls": []
         })
 
         # OSPF commands (segregated for XR configuration)
@@ -32,7 +38,8 @@ class RouterInterface(PhysicalInterface):
             "network": [],
             "passive": [],
             "priority": [],
-            "md5_auth": []
+            "md5_auth": [],
+            "mpls": []
         }
 
         if not egp:
@@ -50,8 +57,13 @@ class RouterInterface(PhysicalInterface):
 
         return str(ip1)+'/30', str(ip2)+'/30'
 
-    # OSPF Configuration
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
+
+        # ===================== ERROR HANDLING =======================================================
+        # Is it connected?
+        if not self.remote_device:
+            raise NetworkError("Dangling/unconnected interface. There's no use in configuring OSPF.")
+        # ============================================================================================
 
         # This interface should not be in EGP mode
         if not self.egp:
@@ -63,7 +75,7 @@ class RouterInterface(PhysicalInterface):
 
             if process_id:
                 self.ospf_process_id = process_id
-                if not self.xr_mode:
+                if not self.__xr_mode:
                     self._cisco_commands["ospf"] = [f"ip ospf {self.ospf_process_id} area {self.ospf_area}"]
 
             if p2p is not None:
@@ -74,17 +86,16 @@ class RouterInterface(PhysicalInterface):
                 else:
                     self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
 
-        else:
+        else:   # In EGP mode
             if area or p2p:  # If any of these parameters are included
                 print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems, "
                       f"so OSPF cannot be configured{Style.RESET_ALL}")
 
-            if self.xr_mode:
+            # That's EGP, so passive interface is enabled to prevent OSPF hello packets from being sent
+            if self.__xr_mode:
                 self.__more_ospf_commands["passive"] = ["passive enable"]
 
-    def ospf_set_priority(self, priority):
-        if not self.ospf_process_id:
-            raise NetworkError("OSPF not initialized yet. Please set the process ID using ospf_config()")
+    def ospf_set_priority(self, priority) -> None:
 
         if not self.ospf_p2p:
             if not (0 <= priority <= 255):
@@ -97,7 +108,7 @@ class RouterInterface(PhysicalInterface):
             print(f"{Fore.MAGENTA}DENIED: This is configured as a point-to-point interface, so priority "
                   f"cannot be changed.{Style.RESET_ALL}")
 
-    def ospf_set_password(self, key: int, password: str):
+    def ospf_set_password(self, key: int, password: str) -> None:
 
         if not self.ospf_process_id:
             raise NetworkError("OSPF not initialized yet. Please set the process ID using ospf_config()")
@@ -105,7 +116,7 @@ class RouterInterface(PhysicalInterface):
         # Set the password for a particular key
         self.__md5_passwords[key] = password
         if self.ospf_p2p and len(self.__md5_passwords) > 1:
-            raise NetworkError("ERROR: Only one password can be added or modified")
+            raise NetworkError("Only one password can be added or modified")
 
         if not self.__md5_auth_enabled:
             self.__more_ospf_commands["md5_auth"].append("authentication message-digest")
@@ -123,15 +134,43 @@ class RouterInterface(PhysicalInterface):
 
             self.ospf_config(p2p=False)  # Must be mult-point configuration
 
-        if self.egp and self.xr_mode:
+        if self.egp and self.__xr_mode:
             self.ospf_config()  # Configure as passive interface
+
+    def toggle_mpls(self):
+
+        # ===================== ERROR HANDLING =======================================================
+        # Is it connected?
+        if not self.remote_device:
+            raise NetworkError("Dangling/unconnected interface. There's no use in configuring MPLS.")
+        # ============================================================================================
+
+        # Just invert the boolean
+        self.__mpls_enabled = not self.__mpls_enabled
+
+        if self.__mpls_enabled:
+            # Display the log check if MPLS is enabled or not
+            print_log("Enabling MPLS")
+
+            # Generate the Cisco command
+            if self.__xr_mode:
+                self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
+            else:
+                self._cisco_commands["mpls"] = ["mpls ip"]
+
+        else:
+            print_log("Disabling MPLS")
+            if self.__xr_mode:
+                self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
+            else:
+                self._cisco_commands["mpls"] = ["no mpls ip", "no mpls label protocol ldp"]
 
     # Get the portion of the command block
     def generate_command_block(self) -> List[str]:
-        if not self.xr_mode:
+        if not self.__xr_mode:
 
             if not self.egp:
-                # Transfer all the cisco commands to self._cisco_commands
+                # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
                 for attribute in self.__more_ospf_commands.keys():
                     if attribute != "passive":
                         self._cisco_commands["ospf"].extend(f"ip ospf {line}" for

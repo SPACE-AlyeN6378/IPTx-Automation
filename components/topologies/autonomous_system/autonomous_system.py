@@ -6,7 +6,8 @@ from typing import Iterable
 class AutonomousSystem(Topology):
     def __init__(self, as_number: int, name: str, devices: Iterable[Switch | Router] = None):
         super().__init__(as_number, devices)
-        self.name = name
+        self.name: str = name
+        self.mpls: bool = True
         self.reference_bw: int = 1      # Reference bandwidth in M bits/s
 
     def __update_reference_bw(self, new_bandwidth: int):    # new_bandwidth in k bits/s
@@ -24,6 +25,9 @@ class AutonomousSystem(Topology):
                 ip1, ip2 = RouterInterface.p2p_ip_addresses(network_address)
                 self[device_id1].interface(port1).config(cidr=ip1)
                 self[device_id2].interface(port2).config(cidr=ip2)
+
+
+
 
 
 

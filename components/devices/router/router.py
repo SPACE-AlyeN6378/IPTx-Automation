@@ -15,7 +15,7 @@ class Router(NetworkDevice):
         self.OSPF_MPLS_PROCESS_ID = 2500
 
         self.ios_xr: bool = ios_xr
-        self.priority = 20      # Priority on a scale of 1 to 100
+        self.priority = 20  # Priority on a scale of 1 to 100
 
         super().__init__(device_id=router_id, hostname=hostname)
         self.add_interface(Loopback(cidr=router_id, description=f"LOOPBACK-FHL-{hostname}"))
@@ -53,7 +53,7 @@ class Router(NetworkDevice):
 
         if self.ios_xr:
             for interface in new_interfaces:
-                interface.xr_mode = True
+                interface.__xr_mode = True
 
         super().add_interface(*new_interfaces)
 
@@ -78,13 +78,14 @@ class Router(NetworkDevice):
     def initialize_route(self):
         # Configure OSPF for all routers
         for interface in self.all_interfaces():
-            interface.ospf_config(self.OSPF_PROCESS_ID)
+            if isinstance(interface.remote_device, Router):
+                interface.ospf_config(self.OSPF_PROCESS_ID)
 
         # Generate Cisco command
         self.__routing_commands["ospf"] = [
-            f"router ospf {self.OSPF_PROCESS_ID}",                    # Define the process ID
-            f"router-id {self.loopback(0).ip_address}",               # Router ID
-            f"auto-cost reference-bandwidth {self.reference_bw}",     # Cost is autoconfigured using reference BW
+            f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
+            f"router-id {self.loopback(0).ip_address}",  # Router ID
+            f"auto-cost reference-bandwidth {self.reference_bw}",  # Cost is autoconfigured using reference BW
         ]
 
         # Generate Cisco command
@@ -97,7 +98,7 @@ class Router(NetworkDevice):
 
                 self.__routing_commands["ospf"].append("exit")
 
-        else:   # For IOS routers, all the EGP interfaces and the first loopback are configured as passive
+        else:  # For IOS routers, all the EGP interfaces and the first loopback are configured as passive
             for interface in self.all_phys_interfaces():
                 if interface.egp:
                     self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")

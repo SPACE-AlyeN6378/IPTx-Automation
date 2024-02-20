@@ -11,7 +11,7 @@ my_topology = AutonomousSystem(as_number=58587, name="My AS", devices=[
             RouterInterface("GigabitEthernet", "0/0/0/1"),
             RouterInterface("GigabitEthernet", "0/0/0/2")
         ],
-        ios_xr=True
+        ios_xr=False
     ),
 
     Router(
@@ -59,9 +59,8 @@ my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1"
 my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2",
                             network_address="10.0.52.0", key=12232)
 
-
-for i in my_topology.get_link_by_nodes("10.255.255.1", "10.255.255.2"):
-    print(i)
+my_topology["10.255.255.1"].initialize_route()
+my_topology["10.255.255.1"].send_script()
 # my_topology.get_device("10.255.255.3").send_script()
 #
 # my_router.set_ospf_area(2, "0/0/3")
