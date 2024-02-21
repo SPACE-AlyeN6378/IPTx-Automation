@@ -57,10 +57,9 @@ my_topology.connect_devices("10.255.255.3", "0/0/0/1", "10.255.255.4", "0/0/0/0"
 my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1",
                             network_address="10.0.41.0")
 my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2",
-                            network_address="10.0.52.0", key=12232)
+                            network_address="10.0.52.0", key=1220)
 
-my_topology["10.255.255.1"].initialize_route()
-my_topology["10.255.255.1"].send_script()
+my_topology.print_links()
 # my_topology.get_device("10.255.255.3").send_script()
 #
 # my_router.set_ospf_area(2, "0/0/3")

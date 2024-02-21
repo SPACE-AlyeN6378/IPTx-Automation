@@ -77,7 +77,7 @@ class Router(NetworkDevice):
     # Basic Route initialization
     def initialize_route(self):
         # Configure OSPF for all routers
-        for interface in self.all_interfaces():
+        for interface in self.all_phys_interfaces():
             if isinstance(interface.remote_device, Router):
                 interface.ospf_config(self.OSPF_PROCESS_ID)
 

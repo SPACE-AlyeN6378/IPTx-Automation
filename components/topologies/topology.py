@@ -1,4 +1,4 @@
-from typing import Iterable, List, Any
+from typing import Iterable, List, Any, Tuple, Dict
 
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -7,6 +7,9 @@ from components.devices.router.router import Router
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
 from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer
+
+# Referenced Data Types
+Edge = Tuple[Switch | Router, Switch | Router, Dict[str, Any]]
 
 
 class Topology:
@@ -19,20 +22,27 @@ class Topology:
         self.add_devices(devices)
 
     # Ensures that a unique key is passed. If the number is not given, the smallest missing number is used instead
-    def __process_key(self, number: int = None) -> int:
-        keys = [edge[2] for edge in self.__graph.edges(keys=True)]
+    def __auto_generate_key(self, number: int = None) -> int:
+        keys = [edge[2]["key"] for edge in self.__graph.edges(data=True)]
 
+        # If the number in the parameter is passed
         if number is not None:
+            # If the number already exists, raise an error
             if number in keys:
-                raise ConnectionRefusedError(f"Key ID '{number}' already exists at another link")
+                raise IndexError(f"Key ID '{number}' already exists at another link")
 
             return number
 
-        else:
+        else:    # The number is not passed in the scenario
             return smallest_missing_non_negative_integer(keys)
 
     def get_all_devices(self) -> List[Switch | Router]:
         return list(self.__graph.nodes())
+
+    def print_links(self) -> None:
+        for edge in self.__graph.edges(data=True):
+            print(f"{edge[0]} ({edge[2]["d1_port"]}) ---> {edge[1]} ({edge[2]["d2_port"]})   Key: {edge[2]["key"]:6d}, "
+                  f"Bandwidth: {edge[2]["bandwidth"]} KB/s")
 
     def get_all_routers(self) -> List[Router]:
         return [node for node in self.__graph.nodes() if isinstance(node, Router)]
@@ -56,14 +66,17 @@ class Topology:
         raise NotFoundError(f"ERROR in AS_NUM {self.as_number}: Device with ID '{device_id}' "
                             f"invalid or not found")
 
-    def get_link_by_key(self, key: int) -> Any:
-        edge_attributes = nx.get_edge_attributes(self.__graph, 'key')
-        for edge, corresponding_key in edge_attributes.items():
-            if key == corresponding_key:
-                return (*edge, self.__graph[edge[0]][edge[1]])
+    def get_link(self, device_id1: str, device_id2: str) -> Edge:
+        return self[device_id1], self[device_id2], self.__graph[self[device_id1]][self[device_id2]]
 
-    def get_link_by_nodes(self, device_id1: str, device_id2: str) -> Any:
-        return (self[device_id1], self[device_id2], self.__graph[self[device_id1]][self[device_id2]])
+    def get_link_by_key(self, key: int) -> None:
+        for edge in self.__graph.edges(data=True):
+            if edge[2]['key'] == key:
+                return edge
+
+        raise IndexError(f"ERROR in AS_NUM {self.as_number}: Edge with key '{key}' not found")
+
+    # def get_bandwidth(self, device_id1: str, device_id2: str):
 
     def add_switch(self, switch: Switch) -> None:
         if not isinstance(switch, Switch):
@@ -116,7 +129,7 @@ class Topology:
     def connect_devices(self, device_id1: str | int, port1: str, device_id2: str | int, port2: str,
                         key: int = None, cable_bandwidth: int = None) -> None:
 
-        # key = self.__process_key(key)
+        key = self.__auto_generate_key(key)
 
         ethernet_types = list(PhysicalInterface.BANDWIDTHS.keys())[1:5]
 
@@ -132,7 +145,7 @@ class Topology:
         self[device_id2].interface(port2).connect_to(self[device_id1], port1, cable_bandwidth)
         link_bandwidth = self[device_id1].interface(port1).bandwidth
 
-        self.__graph.add_edge(self[device_id1], self[device_id2], key=0, bandwidth=link_bandwidth)
+        self.__graph.add_edge(self[device_id1], self[device_id2], d1_port=port1, d2_port=port2, key=key, bandwidth=link_bandwidth)
 
     def show_plot(self, layout: str = "spring"):
         if layout.lower() == "spring":

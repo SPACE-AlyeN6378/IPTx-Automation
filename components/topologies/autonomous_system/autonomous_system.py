@@ -18,8 +18,8 @@ class AutonomousSystem(Topology):
                         key: int = None, network_address: str = None, cable_bandwidth: int = None) -> None:
 
         super().connect_devices(device_id1, port1, device_id2, port2, key, cable_bandwidth)
-        # print(self._graph[self[device_id1]][self[device_id2]][self[device_id2]])
 
+        # Network address is given, so put it in
         if network_address:
             if isinstance(self[device_id1], Router) and isinstance(self[device_id2], Router):
                 ip1, ip2 = RouterInterface.p2p_ip_addresses(network_address)
