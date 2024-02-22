@@ -21,6 +21,15 @@ class Interface:
         else:
             return None, None
 
+    @staticmethod
+    def consistent_spacing_ip(ip_address: str = None) -> str | None:
+        if ip_address is not None:
+            octets = list(map(int, ip_address.split(".")))
+            octets = [f"{octet:3d}" for octet in octets]
+            return '.'.join(octets)
+
+        return '               '
+
     # To make sure that the port is of the format x or x/x/x/... (x is a number) ===================
     @staticmethod
     def validate_port(int_type: str, port: str | int) -> None:

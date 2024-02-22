@@ -1,13 +1,12 @@
-
+from components.interfaces.interface import Interface
 from components.topologies.autonomous_system.autonomous_system import AutonomousSystem, RouterInterface, Router
-
 my_topology = AutonomousSystem(as_number=58587, name="My AS", devices=[
 
     Router(
         router_id="10.255.255.1",
         hostname="P1",
         interfaces=[
-            RouterInterface("GigabitEthernet", "0/0/0/0"),
+            RouterInterface("FastEthernet", "0/0/0/0"),
             RouterInterface("GigabitEthernet", "0/0/0/1"),
             RouterInterface("GigabitEthernet", "0/0/0/2")
         ],
@@ -49,21 +48,17 @@ my_topology = AutonomousSystem(as_number=58587, name="My AS", devices=[
 ])
 
 my_topology.connect_devices("10.255.255.1", "0/0/0/0", "10.255.255.2", "0/0/0/0",
-                            network_address="10.0.12.0")
+                            network_address="10.0.12.0", cable_bandwidth=100000)
 my_topology.connect_devices("10.255.255.2", "0/0/0/1", "10.255.255.3", "0/0/0/0",
-                            network_address="10.0.23.0")
+                            network_address="10.0.23.0", cable_bandwidth=10000)
 my_topology.connect_devices("10.255.255.3", "0/0/0/1", "10.255.255.4", "0/0/0/0",
-                            network_address="10.0.43.0")
+                            network_address="10.0.43.0", cable_bandwidth=1000)
 my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1",
-                            network_address="10.0.41.0")
+                            network_address="10.0.41.0", cable_bandwidth=1000)
 my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2",
-                            network_address="10.0.52.0", key=1220)
+                            scr=1220, cable_bandwidth=50000)
 
-my_topology.print_links()
-# my_topology.get_device("10.255.255.3").send_script()
-#
-# my_router.set_ospf_area(2, "0/0/3")
-#
-# my_router.initialize_route()
-#
-# my_router.send_script()
+my_topology.update_ref_bw_rtrs()
+
+my_topology.get_device("10.255.255.3").initialize_route()
+my_topology.get_device("10.255.255.3").send_script()

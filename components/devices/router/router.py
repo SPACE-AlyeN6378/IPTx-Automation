@@ -11,6 +11,7 @@ class Router(NetworkDevice):
     def __init__(self, router_id: str, hostname: str = "Router",
                  interfaces: Iterable[RouterInterface | Loopback] = None, ios_xr: bool = False) -> None:
 
+        self.mpls_enabled = True
         self.OSPF_PROCESS_ID = 65000
         self.OSPF_MPLS_PROCESS_ID = 2500
 
@@ -78,8 +79,9 @@ class Router(NetworkDevice):
     def initialize_route(self):
         # Configure OSPF for all routers
         for interface in self.all_phys_interfaces():
+            # If the interface is connected to another router
             if isinstance(interface.remote_device, Router):
-                interface.ospf_config(self.OSPF_PROCESS_ID)
+                interface.ospf_config(process_id=self.OSPF_PROCESS_ID, p2p=interface.ospf_p2p)
 
         # Generate Cisco command
         self.__routing_commands["ospf"] = [

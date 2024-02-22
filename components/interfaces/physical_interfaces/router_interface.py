@@ -10,12 +10,12 @@ if TYPE_CHECKING:
 
 
 class RouterInterface(PhysicalInterface):
-    def __init__(self, int_type: str, port: str | int, cidr: str = None, egp: bool = False) -> None:
+    def __init__(self, int_type: str, port: str | int, cidr: str = None) -> None:
         super().__init__(int_type, port, cidr)
 
         # Permanent data types
         self.__xr_mode: bool = False
-        self.egp: bool = egp
+        self.egp: bool = False
 
         # OSPF Attributes
         self.ospf_process_id: int = 0
@@ -41,9 +41,6 @@ class RouterInterface(PhysicalInterface):
             "md5_auth": [],
             "mpls": []
         }
-
-        if not egp:
-            self.__more_ospf_commands["network"] = ["network point-to-point"]
 
     @staticmethod
     def p2p_ip_addresses(network_address: str):
@@ -132,7 +129,7 @@ class RouterInterface(PhysicalInterface):
                 raise NetworkError("ERROR: This interface is for routing between autonomous systems, so this "
                                    "should not be connected to switches during EGP routing")
 
-            self.ospf_config(p2p=False)  # Must be mult-point configuration
+            self.ospf_p2p = False  # Must be mult-point configuration
 
         if self.egp and self.__xr_mode:
             self.ospf_config()  # Configure as passive interface

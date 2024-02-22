@@ -18,12 +18,13 @@ class Topology:
             devices = []
 
         self.as_number = as_number
-        self.__graph = nx.Graph()
+        self._graph = nx.Graph()
         self.add_devices(devices)
 
     # Ensures that a unique key is passed. If the number is not given, the smallest missing number is used instead
     def __auto_generate_key(self, number: int = None) -> int:
-        keys = [edge[2]["key"] for edge in self.__graph.edges(data=True)]
+        keys = [edge[2]["key"] for edge in self._graph.edges(data=True) if "key" in edge[2]]
+        keys.extend(edge[2]["scr"] for edge in self._graph.edges(data=True) if "scr" in edge[2])
 
         # If the number in the parameter is passed
         if number is not None:
@@ -37,21 +38,21 @@ class Topology:
             return smallest_missing_non_negative_integer(keys)
 
     def get_all_devices(self) -> List[Switch | Router]:
-        return list(self.__graph.nodes())
+        return list(self._graph.nodes())
 
     def print_links(self) -> None:
-        for edge in self.__graph.edges(data=True):
-            print(f"{edge[0]} ({edge[2]["d1_port"]}) ---> {edge[1]} ({edge[2]["d2_port"]})   Key: {edge[2]["key"]:6d}, "
-                  f"Bandwidth: {edge[2]["bandwidth"]} KB/s")
+        for edge in self._graph.edges(data=True):
+            print(f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})   Key: {edge[2]['key']:6d}, "
+                  f"Bandwidth: {edge[2]['bandwidth']} KB/s")
 
     def get_all_routers(self) -> List[Router]:
-        return [node for node in self.__graph.nodes() if isinstance(node, Router)]
+        return [node for node in self._graph.nodes() if isinstance(node, Router)]
 
     def get_all_switches(self) -> List[Switch]:
-        return [node for node in self.__graph.nodes() if isinstance(node, Switch)]
+        return [node for node in self._graph.nodes() if isinstance(node, Switch)]
 
     def __getitem__(self, device_id: str) -> Switch | Router:
-        for device in self.__graph.nodes():
+        for device in self._graph.nodes():
             if device_id == device.id():
                 return device
 
@@ -59,7 +60,7 @@ class Topology:
                             f"invalid or not found")
 
     def get_device(self, device_id: str) -> Switch | Router:
-        for device in self.__graph.nodes():
+        for device in self._graph.nodes():
             if device_id == device.id():
                 return device
 
@@ -67,10 +68,10 @@ class Topology:
                             f"invalid or not found")
 
     def get_link(self, device_id1: str, device_id2: str) -> Edge:
-        return self[device_id1], self[device_id2], self.__graph[self[device_id1]][self[device_id2]]
+        return self[device_id1], self[device_id2], self._graph[self[device_id1]][self[device_id2]]
 
     def get_link_by_key(self, key: int) -> None:
-        for edge in self.__graph.edges(data=True):
+        for edge in self._graph.edges(data=True):
             if edge[2]['key'] == key:
                 return edge
 
@@ -84,25 +85,25 @@ class Topology:
 
         # If the ID is not given, then we add the default ID
         if switch.id() is None:
-            all_ids = [device_.id() for device_ in self.__graph.nodes() if isinstance(device_.id(), int)]
+            all_ids = [device_.id() for device_ in self._graph.nodes() if isinstance(device_.id(), int)]
             switch.update_id(smallest_missing_non_negative_integer(all_ids, 1))
 
-        if self.__graph.has_node(switch):
+        if self._graph.has_node(switch):
             raise NetworkError(f"ERROR in AS_NUM {self.as_number}: There's already a device with identical "
                                f"hostname or ID. Please try a different name.")
 
-        self.__graph.add_node(switch)
+        self._graph.add_node(switch)
 
     def add_router(self, router: Router) -> None:
 
         if not isinstance(router, Router):
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {router.hostname} is not a router")
 
-        if self.__graph.has_node(router):
+        if self._graph.has_node(router):
             raise NetworkError(f"ERROR in AS_NUM {self.as_number}: There's already a device with identical "
                                f"ID {router.id()}. Please try a different one.")
 
-        self.__graph.add_node(router)
+        self._graph.add_node(router)
 
     def add_devices(self, devices: Iterable[Router | Switch]):
         for device in devices:
@@ -114,19 +115,19 @@ class Topology:
                 raise TypeError(f"ERROR in AS_NUM {self.as_number}: Invalid device type {str(device)}")
 
     def remove_device(self, device: Switch | Router) -> None:
-        if not self.__graph.has_node(device):
+        if not self._graph.has_node(device):
             raise NetworkError(f"ERROR in AS_NUM {self.as_number}: Device {device.hostname} not found in the topology, "
                                f"so cannot be removed.")
 
-        self.__graph.remove_node(device)
+        self._graph.remove_node(device)
 
     def remove_device_by_id(self, device_id: str):
         for device in self.get_all_devices():
             if device_id == device.id():
-                self.__graph.remove_node(device)
+                self._graph.remove_node(device)
                 break
 
-    def connect_devices(self, device_id1: str | int, port1: str, device_id2: str | int, port2: str,
+    def connect_devices(self, device_id1: str, port1: str, device_id2: str, port2: str,
                         key: int = None, cable_bandwidth: int = None) -> None:
 
         key = self.__auto_generate_key(key)
@@ -145,23 +146,24 @@ class Topology:
         self[device_id2].interface(port2).connect_to(self[device_id1], port1, cable_bandwidth)
         link_bandwidth = self[device_id1].interface(port1).bandwidth
 
-        self.__graph.add_edge(self[device_id1], self[device_id2], d1_port=port1, d2_port=port2, key=key, bandwidth=link_bandwidth)
+        self._graph.add_edge(self[device_id1], self[device_id2], d1_port=port1, d2_port=port2,
+                             key=key, bandwidth=link_bandwidth)
 
     def show_plot(self, layout: str = "spring"):
         if layout.lower() == "spring":
-            pos = nx.spring_layout(self.__graph)
+            pos = nx.spring_layout(self._graph)
         elif layout.lower() == "spectral":
-            pos = nx.spectral_layout(self.__graph)
+            pos = nx.spectral_layout(self._graph)
         elif layout.lower() == "circular":
-            pos = nx.circular_layout(self.__graph)
+            pos = nx.circular_layout(self._graph)
         elif layout.lower() == "shell":
-            pos = nx.shell_layout(self.__graph)
+            pos = nx.shell_layout(self._graph)
         elif layout.lower() == "kamada-kawai":
-            pos = nx.kamada_kawai_layout(self.__graph)
+            pos = nx.kamada_kawai_layout(self._graph)
         else:
             raise ValueError(f"Invalid layout type: {layout}")
 
-        nx.draw(self.__graph, pos, with_labels=True, font_weight='bold', node_size=1000, node_color='skyblue',
+        nx.draw(self._graph, pos, with_labels=True, font_weight='bold', node_size=1000, node_color='skyblue',
                 font_color='black',
                 font_size=10)
 
