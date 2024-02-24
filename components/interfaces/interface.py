@@ -4,6 +4,7 @@ import ipaddress
 from ipaddress import IPv4Address
 from typing import Union, Tuple, List, Iterable
 
+from iptx_utils import print_log
 
 class Interface:
     # Interface types with its associated default bandwidths
@@ -94,6 +95,9 @@ class Interface:
     def __contains__(self, item):
         return self.int_type == item.int_type and self.port == item.port \
             and self.ip_address == item.ip_address and self.subnet_mask == item.subnet_mask
+
+    def print_log(self, message: str):
+        print_log(f"{str(self)}: {message}", color_number=1)
 
     # Configure the interface and generate Cisco command to be sent
     def config(self, cidr: str = None, description: str = None) -> None:

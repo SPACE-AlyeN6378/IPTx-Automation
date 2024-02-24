@@ -30,6 +30,9 @@ class Router(NetworkDevice):
             "bgp": []
         }
 
+    def __str__(self):
+        return super().__str__().replace("Device", "Router")
+
     # ********* GETTERS *********
     # Overriden from NetworkDevice for changing type alias
     def interface(self, port: str) -> RouterInterface:
@@ -54,7 +57,7 @@ class Router(NetworkDevice):
 
         if self.ios_xr:
             for interface in new_interfaces:
-                interface.__xr_mode = True
+                interface.xr_mode = True
 
         super().add_interface(*new_interfaces)
 
@@ -76,37 +79,45 @@ class Router(NetworkDevice):
                 interface.ospf_area = area_number
 
     # Basic Route initialization
-    def initialize_route(self):
-        # Configure OSPF for all routers
+    def begin_internal_routing(self):
+        # Configure OSPF for all interfaces
         for interface in self.all_phys_interfaces():
-            # If the interface is connected to another router
+            # The interface should be connected to another router, and within autonomous system
             if isinstance(interface.remote_device, Router):
-                interface.ospf_config(process_id=self.OSPF_PROCESS_ID, p2p=interface.ospf_p2p)
+                if not interface.egp:
+                    interface.ospf_config(process_id=self.OSPF_PROCESS_ID, p2p=interface.ospf_p2p)
 
-        # Generate Cisco command
+                # If the interface is for inter-autonomous routing, prevent OSPF adjacency using passive-interface
+                else:
+                    interface.ospf_passive_enable()
+
+        for interface in self.all_loopbacks():
+            interface.ospf_config(process_id=self.OSPF_PROCESS_ID)
+
+        # Generate Cisco command for during router OSPF configuration
         self.__routing_commands["ospf"] = [
             f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
             f"router-id {self.loopback(0).ip_address}",  # Router ID
             f"auto-cost reference-bandwidth {self.reference_bw}",  # Cost is autoconfigured using reference BW
         ]
 
-        # Generate Cisco command
+        # Generate Cisco command for IOS XR
         if self.ios_xr:
             for area_number in self.get_all_areas():
                 self.__routing_commands["ospf"].append(f"area {area_number}")
 
                 for interface in self.get_ints_by_ospf_area(area_number):
-                    self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
+                    # If the physical interface is connected or is just a loopback
+                    if interface.int_type == "Loopback":
+                        self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
+                    elif interface.remote_device is not None:
+                        self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
 
                 self.__routing_commands["ospf"].append("exit")
 
-        else:  # For IOS routers, all the EGP interfaces and the first loopback are configured as passive
-            for interface in self.all_phys_interfaces():
-                if interface.egp:
-                    self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
-
-            for interface in self.all_loopbacks():
-                if not interface.allow_hellos:
+        else:  # For IOS routers, all the EGP interfaces and loopbacks are configured as passive, in the OSPF section
+            for interface in self.all_interfaces():
+                if not interface.ospf_allow_hellos and interface is not None:
                     self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
 
         self.__routing_commands["ospf"].append("exit")
@@ -137,4 +148,4 @@ class Router(NetworkDevice):
             script.append("commit")
 
         script.append("end")
-        NetworkDevice.print_script(script, Fore.CYAN)
+        NetworkDevice.print_script(script, Fore.GREEN)

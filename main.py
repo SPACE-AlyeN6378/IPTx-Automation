@@ -56,9 +56,11 @@ my_topology.connect_devices("10.255.255.3", "0/0/0/1", "10.255.255.4", "0/0/0/0"
 my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1",
                             network_address="10.0.41.0", cable_bandwidth=1000)
 my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2",
-                            scr=1220, cable_bandwidth=50000)
+                            network_address="10.0.5.0", scr=1220, cable_bandwidth=50000)
+
 
 my_topology.update_ref_bw_rtrs()
 
-my_topology.get_device("10.255.255.3").initialize_route()
-my_topology.get_device("10.255.255.3").send_script()
+my_topology["10.255.255.3"].begin_internal_routing()
+my_topology["10.255.255.3"].send_script()
+

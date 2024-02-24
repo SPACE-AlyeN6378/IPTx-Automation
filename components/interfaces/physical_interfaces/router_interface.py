@@ -2,7 +2,7 @@ from components.interfaces.physical_interfaces.physical_interface import Physica
 from typing import List, TYPE_CHECKING, Dict
 from components.devices.switch.switch import Switch
 from colorama import Fore, Style
-from iptx_utils import NetworkError, print_log
+from iptx_utils import NetworkError
 import ipaddress
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ class RouterInterface(PhysicalInterface):
         super().__init__(int_type, port, cidr)
 
         # Permanent data types
-        self.__xr_mode: bool = False
+        self.xr_mode: bool = False
         self.egp: bool = False
 
         # OSPF Attributes
@@ -22,6 +22,7 @@ class RouterInterface(PhysicalInterface):
         self.ospf_area: int = 0
         self.ospf_p2p: bool = True
         self.ospf_priority: int = 1
+        self.ospf_allow_hellos: bool = True
         self.__md5_auth_enabled: bool = False
         self.__md5_passwords: Dict[int, str] = dict()
 
@@ -72,7 +73,7 @@ class RouterInterface(PhysicalInterface):
 
             if process_id:
                 self.ospf_process_id = process_id
-                if not self.__xr_mode:
+                if not self.xr_mode:
                     self._cisco_commands["ospf"] = [f"ip ospf {self.ospf_process_id} area {self.ospf_area}"]
 
             if p2p is not None:
@@ -84,13 +85,22 @@ class RouterInterface(PhysicalInterface):
                     self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
 
         else:   # In EGP mode
-            if area or p2p:  # If any of these parameters are included
-                print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems, "
-                      f"so OSPF cannot be configured{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems, "
+                  f"so OSPF cannot be configured{Style.RESET_ALL}")
 
-            # That's EGP, so passive interface is enabled to prevent OSPF hello packets from being sent
-            if self.__xr_mode:
-                self.__more_ospf_commands["passive"] = ["passive enable"]
+    def ospf_passive_enable(self):
+        self.ospf_allow_hellos = False
+        if self.xr_mode:
+            self.__more_ospf_commands["passive"] = ["passive enable"]
+
+    def ospf_passive_disable(self):
+        self.ospf_allow_hellos = True
+        if self.xr_mode:
+            if self.__more_ospf_commands["passive"][0] == "passive enable":
+                self.__more_ospf_commands["passive"].clear()
+
+            else:
+                self.__more_ospf_commands["passive"] = ["passive disable"]
 
     def ospf_set_priority(self, priority) -> None:
 
@@ -102,8 +112,8 @@ class RouterInterface(PhysicalInterface):
             self.__more_ospf_commands["priority"] = [f"priority {priority}"]
 
         else:
-            print(f"{Fore.MAGENTA}DENIED: This is configured as a point-to-point interface, so priority "
-                  f"cannot be changed.{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}DENIED: This is configured as a point-to-point interface, so changing "
+                  f"priority is not necessary.{Style.RESET_ALL}")
 
     def ospf_set_password(self, key: int, password: str) -> None:
 
@@ -125,55 +135,50 @@ class RouterInterface(PhysicalInterface):
         super().connect_to(remote_device, remote_port, cable_bandwidth)
 
         if isinstance(remote_device, Switch):
-            if not self.egp:  # Don't connect to switches for EGP routing
+            if self.egp:  # Don't connect to switches for EGP routing
                 raise NetworkError("ERROR: This interface is for routing between autonomous systems, so this "
                                    "should not be connected to switches during EGP routing")
 
-            self.ospf_p2p = False  # Must be mult-point configuration
+            self.ospf_p2p = False  # Must be multipoint configuration
 
-        if self.egp and self.__xr_mode:
-            self.ospf_config()  # Configure as passive interface
-
-    def toggle_mpls(self):
-
+    def mpls_enable(self) -> None:
         # ===================== ERROR HANDLING =======================================================
         # Is it connected?
         if not self.remote_device:
             raise NetworkError("Dangling/unconnected interface. There's no use in configuring MPLS.")
         # ============================================================================================
 
-        # Just invert the boolean
-        self.__mpls_enabled = not self.__mpls_enabled
+        # Set it to True
+        self.__mpls_enabled = True
 
-        if self.__mpls_enabled:
-            # Display the log check if MPLS is enabled or not
-            print_log("Enabling MPLS")
+        # Display the log check if MPLS is enabled or not
+        self.print_log("Enabling MPLS")
 
-            # Generate the Cisco command
-            if self.__xr_mode:
-                self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
-            else:
-                self._cisco_commands["mpls"] = ["mpls ip"]
-
+        # Generate the Cisco command
+        if self.xr_mode:
+            self.__more_ospf_commands["mpls"] = ["mpls ldp sync"]
         else:
-            print_log("Disabling MPLS")
-            if self.__xr_mode:
-                self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
-            else:
-                self._cisco_commands["mpls"] = ["no mpls ip", "no mpls label protocol ldp"]
+            self._cisco_commands["mpls"] = ["mpls ip"]
 
-    # Get the portion of the command block
+    def mpls_disable(self) -> None:
+        # Set it to False
+        self.__mpls_enabled = False
+
+        # Generate Cisco commands
+        if self.xr_mode:
+            self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
+        else:
+            self._cisco_commands["mpls"] = ["no mpls ip", "no mpls label protocol ldp"]
+
     def generate_command_block(self) -> List[str]:
-        if not self.__xr_mode:
+        if not self.xr_mode:
+            # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
+            for attribute in self.__more_ospf_commands.keys():
+                if self.__more_ospf_commands[attribute]:
+                    self._cisco_commands["ospf"].extend(f"ip ospf {line}" for
+                                                        line in self.__more_ospf_commands[attribute])
 
-            if not self.egp:
-                # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
-                for attribute in self.__more_ospf_commands.keys():
-                    if attribute != "passive":
-                        self._cisco_commands["ospf"].extend(f"ip ospf {line}" for
-                                                            line in self.__more_ospf_commands[attribute])
-
-                    self.__more_ospf_commands[attribute].clear()
+                self.__more_ospf_commands[attribute].clear()
 
         else:
             # Replace IP with IPv4 in one of the Cisco command lines

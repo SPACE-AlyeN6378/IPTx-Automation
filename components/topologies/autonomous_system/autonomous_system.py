@@ -4,6 +4,8 @@ import networkx as nx
 from components.interfaces.physical_interfaces.router_interface import RouterInterface
 from typing import Iterable
 
+from iptx_utils import NetworkError
+
 
 class AutonomousSystem(Topology):
     def __init__(self, as_number: int, name: str, devices: Iterable[Switch | Router] = None, mpls: bool = True):
@@ -17,7 +19,9 @@ class AutonomousSystem(Topology):
         super().add_router(router)
 
     def print_links(self) -> None:
-        for edge in self._graph.edges(data=True):
+        links = sorted(self._graph.edges(data=True), key=lambda link: link[2]["scr"])
+
+        for edge in links:
             print(f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})   SCR: {edge[2]['scr']:6d}, "
                   f"Network IP: {Interface.consistent_spacing_ip(edge[2]['network_address'])}, "
                   f"Bandwidth: {edge[2]['bandwidth']:8d} KB/s, External: {edge[2]['egp']}")
@@ -30,14 +34,38 @@ class AutonomousSystem(Topology):
         for router in self.get_all_routers():
             router.reference_bw = self.reference_bw
 
-    def assign_network_ip_address(self, network_address: str, **kwargs) -> None:
-        network_addresses = [edge[2]["network_address"] for edge in self._graph.edges(data=True)]
-        if network_address in network_addresses:
+    def assign_network_ip_address(self, network_address: str,
+                                  device_id1: str = None,
+                                  device_id2: str = None,
+                                  scr: int = None) -> None:
 
+        network_addresses = [edge[2]["network_address"] for edge in self._graph.edges(data=True)
+                             if "network_address" in edge[2]]
+
+        if network_address in network_addresses:
+            raise NetworkError(f"Network address '{network_address}' is already used in another network.")
+
+        if device_id1 and device_id2:
+            edge = self.get_link(device_id1, device_id2)
+        elif scr:
+            edge = self.get_link_by_key(scr)
+        else:
+            raise TypeError("Please provide either both device_id1 and device_id2, or just the SCR/key")
+
+        edge[2]["network_address"] = network_address
+
+        port1 = edge[2]["d1_port"]
+        port2 = edge[2]["d2_port"]
+
+        if isinstance(self[device_id1], Router) and isinstance(self[device_id2], Router):
+            ip1, ip2 = RouterInterface.p2p_ip_addresses(network_address)
+            self[device_id1].interface(port1).config(cidr=ip1)
+            self[device_id2].interface(port2).config(cidr=ip2)
 
     def connect_devices(self, device_id1: str | int, port1: str, device_id2: str | int, port2: str,
                         scr: int = None, network_address: str = None, cable_bandwidth: int = None) -> None:
 
+        self.print_log(f"Connecting devices {self[device_id1]} to {self[device_id2]}...")
         super().connect_devices(device_id1, port1, device_id2, port2, scr, cable_bandwidth)
 
         # Update the reference bandwidth
@@ -50,18 +78,16 @@ class AutonomousSystem(Topology):
 
         # Network address is given, so put it in
         if network_address:
-            if isinstance(self[device_id1], Router) and isinstance(self[device_id2], Router):
-                ip1, ip2 = RouterInterface.p2p_ip_addresses(network_address)
-                self[device_id1].interface(port1).config(cidr=ip1)
-                self[device_id2].interface(port2).config(cidr=ip2)
-
-        self.get_link(device_id1, device_id2)[2]["network_address"] = network_address
+            self.assign_network_ip_address(network_address, device_id1, device_id2)
+        else:
+            self.get_link(device_id1, device_id2)[2]["network_address"] = None
 
         # If MPLS is enabled, enable MPLS to all the routers
-        self[device_id1].interface(port1).toggle_mpls()
-        self[device_id2].interface(port2).toggle_mpls()
+        if self.mpls:
+            self[device_id1].interface(port1).mpls_enable()
+            self[device_id2].interface(port2).mpls_enable()
 
-        # This is an intra-autonomous connection, so EGP attribute is added
+        # This is an intra-autonomous connection, so EGP is always False
         self.get_link(device_id1, device_id2)[2]["egp"] = False
 
 

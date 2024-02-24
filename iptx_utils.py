@@ -91,8 +91,16 @@ def smallest_missing_non_negative_integer(iterable: Iterable[int], starting_numb
     return max(iterable) + 1
 
 
-def print_log(text: str):
+def print_log(text: str, color_number: int = 2):
     current_datetime = datetime.datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"{Fore.BLUE}{formatted_datetime} | {text}{Style.RESET_ALL}")
+
+    if color_number == 0:
+        color = Fore.WHITE + Style.BRIGHT
+    elif color_number == 1:
+        color = Fore.CYAN + Style.BRIGHT
+    else:
+        color = Fore.BLUE + Style.BRIGHT
+
+    print(f"{color}{formatted_datetime} | {text}{Style.RESET_ALL}")
 

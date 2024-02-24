@@ -201,4 +201,4 @@ class NetworkDevice:
             script.extend(interface.generate_command_block())
 
         script.append("end")
-        NetworkDevice.print_script(script, Fore.CYAN)
+        NetworkDevice.print_script(script, Fore.GREEN)

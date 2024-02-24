@@ -10,7 +10,7 @@ class Loopback(Interface):
 
         self.config(description=description)
         self.ospf_area = 0
-        self.allow_hellos = False    # Allow hello packets to be sent at fixed intervals
+        self.ospf_allow_hellos = False    # Allow hello packets to be sent at fixed intervals
         self.xr_mode = False
 
         self._cisco_commands.update({
@@ -29,10 +29,10 @@ class Loopback(Interface):
             self.ospf_area = area
 
         if allow_hellos is not None:    # If you want to allow hello packets to be sent
-            self.allow_hellos = allow_hellos
+            self.ospf_allow_hellos = allow_hellos
 
         if self.xr_mode:  # For Cisco XR routers
-            if self.allow_hellos:
+            if self.ospf_allow_hellos:
                 self.__ospf_xr_commands = ["passive disable", "network point-to-multipoint"]
             else:
                 self.__ospf_xr_commands = ["passive enable"]

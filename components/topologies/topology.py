@@ -6,7 +6,7 @@ from components.devices.switch.switch import Switch
 from components.devices.router.router import Router
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
-from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer
+from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer, print_log
 
 # Referenced Data Types
 Edge = Tuple[Switch | Router, Switch | Router, Dict[str, Any]]
@@ -20,6 +20,9 @@ class Topology:
         self.as_number = as_number
         self._graph = nx.Graph()
         self.add_devices(devices)
+
+    def print_log(self, text: str) -> None:
+        print_log(f"AS {self.as_number}: {text}", color_number=0)
 
     # Ensures that a unique key is passed. If the number is not given, the smallest missing number is used instead
     def __auto_generate_key(self, number: int = None) -> int:
@@ -70,7 +73,7 @@ class Topology:
     def get_link(self, device_id1: str, device_id2: str) -> Edge:
         return self[device_id1], self[device_id2], self._graph[self[device_id1]][self[device_id2]]
 
-    def get_link_by_key(self, key: int) -> None:
+    def get_link_by_key(self, key: int) -> Edge:
         for edge in self._graph.edges(data=True):
             if edge[2]['key'] == key:
                 return edge
