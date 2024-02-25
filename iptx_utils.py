@@ -28,7 +28,6 @@ class NotFoundError(Exception):
 
 # Split f0/0 --> (FastEthernet, 0/0) from GNS3 =================================================
 def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
-
     # Can't accept both
     if shortname and longname:
         raise TypeError("Which parameter do you expect me to use? Please use any one of these two.")
@@ -104,3 +103,23 @@ def print_log(text: str, color_number: int = 2):
 
     print(f"{color}{formatted_datetime} | {text}{Style.RESET_ALL}")
 
+
+def print_warning(text: str):
+    print(f"{Fore.YELLOW}WARNING! {text}{Style.RESET_ALL}")
+
+
+def print_success(text: str):
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    color = Fore.GREEN + Style.BRIGHT
+
+    print(f"{color}{formatted_datetime} | {text}{Style.RESET_ALL}")
+
+
+def print_table(data):
+    # Find the maximum length of each column
+    col_width = [max(len(str(item)) for item in col) for col in zip(*data)]
+
+    # Print the table with consistent spacing
+    for row in data:
+        print(" | ".join("{:{width}}".format(item, width=width) for item, width in zip(row, col_width)))

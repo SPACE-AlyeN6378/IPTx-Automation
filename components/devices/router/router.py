@@ -11,12 +11,17 @@ class Router(NetworkDevice):
     def __init__(self, router_id: str, hostname: str = "Router",
                  interfaces: Iterable[RouterInterface | Loopback] = None, ios_xr: bool = False) -> None:
 
-        self.mpls_enabled = True
-        self.OSPF_PROCESS_ID = 65000
-        self.OSPF_MPLS_PROCESS_ID = 2500
+        self.mpls_enabled: bool = True
+        self.OSPF_PROCESS_ID: int = 65000
+        # self.OSPF_MPLS_PROCESS_ID: int = 2500
 
         self.ios_xr: bool = ios_xr
-        self.priority = 20  # Priority on a scale of 1 to 100
+        self.priority: int = 20  # Priority on a scale of 1 to 100
+
+        # BGP properties
+        self.as_number: int = 0
+        self.route_reflector: bool = False
+        self.ibgp_adjacent_router_ids: List[str] = []
 
         super().__init__(device_id=router_id, hostname=hostname)
         self.add_interface(Loopback(cidr=router_id, description=f"LOOPBACK-FHL-{hostname}"))
@@ -24,33 +29,39 @@ class Router(NetworkDevice):
 
         self.reference_bw = self.get_max_bandwidth() // 1000
 
-        self.__routing_commands: Dict[str, List[str]] = {
+        self.__routing_commands: Dict[str, List[str] | Dict[str, List[str]]] = {
             "ospf": [],
-            "ospf_mpls": [],
-            "bgp": []
+            "bgp": {
+                "start": [],
+                "id": [],
+                "address_families": [],
+                "ipv4_uni-cast": [],
+                "vpn_v4": [],
+                "neighbor_group": [],
+                "neighbor": [],
+            }
         }
 
     def __str__(self):
-        return super().__str__().replace("Device", "Router")
+        name = super().__str__().replace("Device", "Router")
+        if self.ios_xr:
+            name = "XR " + name
+
+        return name
 
     # ********* GETTERS *********
-    # Overriden from NetworkDevice for changing type alias
     def interface(self, port: str) -> RouterInterface:
         return super().interface(port)
 
-    # Overriden from NetworkDevice for changing type alias
     def interface_range(self, *ports: str) -> List[RouterInterface]:
         return super().interface_range(*ports)
 
-    # Overriden from NetworkDevice for changing type alias
     def all_phys_interfaces(self) -> List[RouterInterface]:
         return super().all_phys_interfaces()
 
-    # Overriden from NetworkDevice for changing type alias
     def all_interfaces(self) -> List[RouterInterface | Loopback]:
         return super().all_interfaces()
 
-    # Overriden from NetworkDevice
     def add_interface(self, *new_interfaces: RouterInterface | Loopback) -> None:
         if not all(isinstance(interface, (RouterInterface, Loopback)) for interface in new_interfaces):
             raise TypeError("All interfaces should either be a RouterInterface or a Loopback")
@@ -97,7 +108,7 @@ class Router(NetworkDevice):
         # Generate Cisco command for during router OSPF configuration
         self.__routing_commands["ospf"] = [
             f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
-            f"router-id {self.loopback(0).ip_address}",  # Router ID
+            f"router-id {self.id()}",  # Router ID
             f"auto-cost reference-bandwidth {self.reference_bw}",  # Cost is autoconfigured using reference BW
         ]
 
@@ -122,7 +133,41 @@ class Router(NetworkDevice):
 
         self.__routing_commands["ospf"].append("exit")
 
-    # Generate a complete configuration script
+    def begin_ibgp_routing(self) -> None:
+        # Error check
+        if self.as_number == 0:
+            raise ValueError("The AS number for this router hasn't been assigned yet.")
+
+        if not self.ibgp_adjacent_router_ids:
+            raise ValueError("The AS number for this router hasn't been assigned yet.")
+
+        # Starting with the AS number and the ID
+        self.__routing_commands["bgp"]["start"] = [f"router bgp {self.as_number}"]
+        self.__routing_commands["bgp"]["id"] = [
+            f"bgp router-id {self.id()}",
+            f"bgp cluster-id {self.id()}"
+        ]
+
+        # VPNv4 Routing
+        if self.ios_xr:
+            pass
+        else:
+            # VPNv4 Routing
+            self.__routing_commands["bgp"]["vpn_v4"] = ["address-family vpnv4"]
+
+            for router_id in self.ibgp_adjacent_router_ids:
+                self.__routing_commands["bgp"]["neighbor"].extend([
+                    f"neighbor {router_id} remote-as {self.as_number}",
+                    f"neighbor {router_id} send-community extended"
+                ])
+
+                self.__routing_commands["bgp"]["vpn_v4"].extend([
+                    f"neighbor {router_id} activate",
+                    f"neighbor {router_id} send-community extended"
+                ])
+
+            self.__routing_commands["bgp"]["vpn_v4"].append("exit-address-family")
+
     def send_script(self) -> None:
         # Start with 'configure terminal'
         script = ["configure terminal"]
@@ -148,4 +193,4 @@ class Router(NetworkDevice):
             script.append("commit")
 
         script.append("end")
-        NetworkDevice.print_script(script, Fore.GREEN)
+        NetworkDevice.print_script(script, Fore.WHITE)

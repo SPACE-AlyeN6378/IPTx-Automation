@@ -6,7 +6,7 @@ from components.devices.switch.switch import Switch
 from components.devices.router.router import Router
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
-from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer, print_log
+from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer, print_log, print_success
 
 # Referenced Data Types
 Edge = Tuple[Switch | Router, Switch | Router, Dict[str, Any]]
@@ -22,7 +22,7 @@ class Topology:
         self.add_devices(devices)
 
     def print_log(self, text: str) -> None:
-        print_log(f"AS {self.as_number}: {text}", color_number=0)
+        print_log(f"AS {self.as_number}: {text}")
 
     # Ensures that a unique key is passed. If the number is not given, the smallest missing number is used instead
     def __auto_generate_key(self, number: int = None) -> int:
@@ -44,9 +44,12 @@ class Topology:
         return list(self._graph.nodes())
 
     def print_links(self) -> None:
+        print()
+        print_log("The following connections have been established:")
         for edge in self._graph.edges(data=True):
             print(f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})   Key: {edge[2]['key']:6d}, "
                   f"Bandwidth: {edge[2]['bandwidth']} KB/s")
+        print()
 
     def get_all_routers(self) -> List[Router]:
         return [node for node in self._graph.nodes() if isinstance(node, Router)]
@@ -80,8 +83,6 @@ class Topology:
 
         raise IndexError(f"ERROR in AS_NUM {self.as_number}: Edge with key '{key}' not found")
 
-    # def get_bandwidth(self, device_id1: str, device_id2: str):
-
     def add_switch(self, switch: Switch) -> None:
         if not isinstance(switch, Switch):
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {switch.hostname} is not a switch")
@@ -96,9 +97,11 @@ class Topology:
                                f"hostname or ID. Please try a different name.")
 
         self._graph.add_node(switch)
+        print_success(f"{str(switch)} added!")
 
     def add_router(self, router: Router) -> None:
 
+        router.as_number = self.as_number
         if not isinstance(router, Router):
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {router.hostname} is not a router")
 
@@ -107,6 +110,7 @@ class Topology:
                                f"ID {router.id()}. Please try a different one.")
 
         self._graph.add_node(router)
+        print_success(f"{str(router)} added!")
 
     def add_devices(self, devices: Iterable[Router | Switch]):
         for device in devices:

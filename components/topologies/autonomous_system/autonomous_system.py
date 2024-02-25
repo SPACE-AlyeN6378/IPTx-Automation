@@ -1,38 +1,70 @@
-from components.interfaces.interface import Interface
 from components.topologies.topology import Topology, Switch, Router
-import networkx as nx
 from components.interfaces.physical_interfaces.router_interface import RouterInterface
 from typing import Iterable
 
-from iptx_utils import NetworkError
+from iptx_utils import NetworkError, print_log, print_table, print_warning, print_success
 
 
 class AutonomousSystem(Topology):
-    def __init__(self, as_number: int, name: str, devices: Iterable[Switch | Router] = None, mpls: bool = True):
+    def __init__(self, as_number: int, name: str, devices: Iterable[Switch | Router] = None,
+                 route_reflector_id: str = None,
+                 mpls: bool = True):
+
+        print(f"\n==================== AUTONOMOUS SYSTEM {as_number}: '{name}' ====================\n")
         super().__init__(as_number, devices)
         self.name: str = name
         self.mpls: bool = mpls
         self.reference_bw: int = 1      # Reference bandwidth in M bits/s
 
-    def add_router(self, router: Router) -> None:
-
-        super().add_router(router)
+        if route_reflector_id:
+            self.route_reflector = route_reflector_id
+            self.select_route_reflector(route_reflector_id)
+        else:
+            self.route_reflector = None
 
     def print_links(self) -> None:
         links = sorted(self._graph.edges(data=True), key=lambda link: link[2]["scr"])
+        table = [[
+            f"SCR: {edge[2]['scr']}",
+            f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})",
+            f"Network IP: {edge[2]['network_address']}",
+            f"Bandwidth: {edge[2]['bandwidth']} KB/s",
+            f"External: {edge[2]['egp']}"
+        ] for edge in links]
 
-        for edge in links:
-            print(f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})   SCR: {edge[2]['scr']:6d}, "
-                  f"Network IP: {Interface.consistent_spacing_ip(edge[2]['network_address'])}, "
-                  f"Bandwidth: {edge[2]['bandwidth']:8d} KB/s, External: {edge[2]['egp']}")
+        print()
+        print_log("The following connections have been established:")
+        print_table(table)
+        print()
 
-    def __update_reference_bw(self, new_bandwidth: int):    # new_bandwidth in k bits/s
+    def __update_reference_bw(self, new_bandwidth: int) -> None:    # new_bandwidth in k bits/s
         if (new_bandwidth // 1000) > self.reference_bw:
             self.reference_bw = new_bandwidth // 1000
 
-    def update_ref_bw_rtrs(self) -> None:
+    def select_route_reflector(self, router_id: str) -> None:
+        # Route-reflection is of no use with a single router
+        if len([router.id() for router in self.get_all_routers()]) == 1:
+            print_warning("This autonomous system only has one router. So there's no use of route-reflecting")
+
+        # The route-reflector attribute is set to True for the router with a matching router ID
+        self.get_device(router_id).route_reflector = True
+
+        # Iterate through each spoke in the topology
         for router in self.get_all_routers():
+            # router_id --> ID of route-reflector router
+            # router.id() --> ID of other routers
+            if router_id != router.id():
+                router.ibgp_adjacent_router_ids.append(router_id)
+                self.get_device(router_id).ibgp_adjacent_router_ids.append(router.id())
+
+        print_success(f"{self.get_device(router_id)} with ID {router_id} chosen as Route-reflector client")
+
+    def begin_internal_routing(self) -> None:
+        for router in self.get_all_routers():
+            print_log(f"Beginning route in {str(router)}...")
             router.reference_bw = self.reference_bw
+            router.begin_internal_routing()
+            router.send_script()
 
     def assign_network_ip_address(self, network_address: str,
                                   device_id1: str = None,
