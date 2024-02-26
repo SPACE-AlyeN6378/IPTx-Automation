@@ -63,7 +63,7 @@ class AutonomousSystem(Topology):
         for router in self.get_all_routers():
             print_log(f"Beginning route in {str(router)}...")
             router.reference_bw = self.reference_bw
-            router.begin_internal_routing()
+            router.begin_igp_routing()
             router.send_script()
 
     def assign_network_ip_address(self, network_address: str,
@@ -121,6 +121,3 @@ class AutonomousSystem(Topology):
 
         # This is an intra-autonomous connection, so EGP is always False
         self.get_link(device_id1, device_id2)[2]["egp"] = False
-
-
-

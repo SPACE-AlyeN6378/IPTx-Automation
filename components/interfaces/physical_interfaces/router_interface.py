@@ -27,7 +27,7 @@ class RouterInterface(PhysicalInterface):
         self.__md5_passwords: Dict[int, str] = dict()
 
         # MPLS Attributes
-        self.__mpls_enabled: bool = False
+        self.mpls_enabled: bool = False
 
         self._cisco_commands.update({
             "ospf": [],
@@ -149,7 +149,7 @@ class RouterInterface(PhysicalInterface):
         # ============================================================================================
 
         # Set it to True
-        self.__mpls_enabled = True
+        self.mpls_enabled = True
 
         # Display the log check if MPLS is enabled or not
         self.print_log("Enabling MPLS")
@@ -162,7 +162,7 @@ class RouterInterface(PhysicalInterface):
 
     def mpls_disable(self) -> None:
         # Set it to False
-        self.__mpls_enabled = False
+        self.mpls_enabled = False
 
         # Generate Cisco commands
         if self.xr_mode:
