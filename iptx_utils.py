@@ -1,5 +1,4 @@
 from typing import Iterable, Tuple, Dict, List
-import components.interfaces.interface as inf
 import datetime
 from colorama import Fore, Style
 
@@ -28,6 +27,9 @@ class NotFoundError(Exception):
 
 # Split f0/0 --> (FastEthernet, 0/0) from GNS3 =================================================
 def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
+    DEFAULT_TYPES = ("ATM", "Ethernet", "FastEthernet", "GigabitEthernet", "TenGigabitEthernet",
+                     "Serial", "wlan-gigabitethernet", "Loopback", "Tunnel", "VLAN")
+
     # Can't accept both
     if shortname and longname:
         raise TypeError("Which parameter do you expect me to use? Please use any one of these two.")
@@ -36,8 +38,7 @@ def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
 
     # Short name of format, for e.g. g0/1/0
     if shortname:
-
-        for int_type in inf.Interface.DEFAULT_TYPES:
+        for int_type in DEFAULT_TYPES:
             if int_type[0].lower() == shortname[0].lower():
                 required_int_type = int_type
                 break
@@ -49,7 +50,7 @@ def split_port_name(shortname: str = "", longname: str = "") -> Tuple[str, str]:
 
     # Long name of format, for e.g. GigabitEthernet0/1/0
     elif longname:
-        for int_type in inf.Interface.DEFAULT_TYPES:
+        for int_type in DEFAULT_TYPES:
             if int_type in longname[:len(int_type)]:
                 required_int_type = int_type
                 break
@@ -95,17 +96,19 @@ def print_log(text: str, color_number: int = 2):
     formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
     if color_number == 0:
-        color = Fore.WHITE + Style.BRIGHT
+        color = Fore.WHITE
     elif color_number == 1:
-        color = Fore.CYAN + Style.BRIGHT
+        color = Fore.CYAN
     else:
-        color = Fore.BLUE + Style.BRIGHT
+        color = Fore.BLUE
 
     print(f"{color}{formatted_datetime} | {text}{Style.RESET_ALL}")
 
 
 def print_warning(text: str):
-    print(f"{Fore.YELLOW}WARNING! {text}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}WARNING! {text}")
+    if input(f"Do you want to continue? (Y/?): {Style.RESET_ALL}").upper() != 'Y':
+        exit()
 
 
 def print_success(text: str):

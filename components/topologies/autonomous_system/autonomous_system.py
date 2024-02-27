@@ -47,6 +47,7 @@ class AutonomousSystem(Topology):
             print_warning("This autonomous system only has one router. So there's no use of route-reflecting")
 
         # The route-reflector attribute is set to True for the router with a matching router ID
+        self.route_reflector = router_id
         self.get_device(router_id).route_reflector = True
 
         # Iterate through each spoke in the topology
@@ -58,6 +59,7 @@ class AutonomousSystem(Topology):
                 self.get_device(router_id).ibgp_adjacent_router_ids.append(router.id())
 
         print_success(f"{self.get_device(router_id)} with ID {router_id} chosen as Route-reflector client")
+        self.get_device(router_id).set_hostname(self.get_device(router_id).hostname + "-RR")
 
     def begin_internal_routing(self) -> None:
         for router in self.get_all_routers():

@@ -5,6 +5,8 @@ from components.interfaces.physical_interfaces.router_interface import RouterInt
 from components.interfaces.loopback.loopback import Loopback
 from typing import Iterable, Dict, List, Set
 
+from iptx_utils import print_warning
+
 
 class Router(NetworkDevice):
 
@@ -14,8 +16,6 @@ class Router(NetworkDevice):
         self.mpls_enabled: bool = True
         self.OSPF_PROCESS_ID: int = 65000
         # self.OSPF_MPLS_PROCESS_ID: int = 2500
-
-        self.reference_bw = self.get_max_bandwidth() // 1000
 
         self.ios_xr: bool = ios_xr
         self.priority: int = 20  # Priority on a scale of 1 to 100
@@ -29,23 +29,18 @@ class Router(NetworkDevice):
         self.add_interface(Loopback(cidr=router_id, description=f"LOOPBACK-FHL-{hostname}"))
         self.add_interface(*interfaces)
 
+        # Reference bandwidth
+        self.reference_bw = self.get_max_bandwidth() // 1000
+
         # VRF
         self.vrf_list: Dict[int, Dict[str, int | str]] = dict()
         self._basic_commands.update({
             "vrf": []
         })
 
-        self.__routing_commands: Dict[str, List[str] | Dict[str, List[str]]] = {
+        self.__routing_commands: Dict[str, List[str]] = {
             "ospf": [],
-            "bgp": {
-                "start": [],
-                "id": [],
-                "address_families": [],
-                "ipv4_uni-cast": [],
-                "vpn_v4": [],
-                "neighbor_group": [],
-                "neighbor": [],
-            },
+            "bgp": [],
             "mpls": []
         }
 
@@ -66,6 +61,9 @@ class Router(NetworkDevice):
             name = "XR " + name
 
         return name
+
+    def __any_mpls_interfaces(self) -> bool:
+        return any(interface.mpls_enabled for interface in self.all_phys_interfaces())
 
     # ********* GETTERS *********
     def interface(self, port: str) -> RouterInterface:
@@ -117,12 +115,14 @@ class Router(NetworkDevice):
 
         if self.ios_xr:
             self._basic_commands["vrf"].extend([
+                f"vrf {name}",
                 "address-family ipv4 unicast",
                 "import route-target",
                 f"{self.as_number}:{import_target}",
                 "exit",
                 "export route-target",
                 f"{self.as_number}:{rd_number}",
+                "exit",
                 "exit",
                 "exit"
             ])
@@ -173,7 +173,7 @@ class Router(NetworkDevice):
                 self.__routing_commands["ospf"].append("exit")
 
             # If there is any MPLS
-            if any(interface.mpls_enabled for interface in self.all_phys_interfaces()):
+            if self.__any_mpls_interfaces():
                 self.__routing_commands["mpls"] = [
                     "mpls ldp",
                     f"router-id {self.id()}"
@@ -190,58 +190,185 @@ class Router(NetworkDevice):
 
             # All the EGP interfaces and loopbacks are configured as passive, in the OSPF section
             for interface in self.all_interfaces():
-                if not interface.ospf_allow_hellos and interface is not None:
+                if not interface.ospf_allow_hellos:
                     self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
 
             # If MPLS is enabled in any interfaces, enable LDP synchronization
-            if any(interface.mpls_enabled for interface in self.all_phys_interfaces()):
+            if self.__any_mpls_interfaces():
                 self.__routing_commands["ospf"].append("mpls ldp sync")
 
         self.__routing_commands["ospf"].append("exit")
 
-    def disable_ldp_sync(self):
-        # If the 'mpls ldp sync' command is stored in the command
-        if not self.ios_xr:
-            if "mpls ldp sync" in self.__routing_commands["ospf"]:
-                self.__routing_commands["ospf"].remove("mpls ldp sync")
-            else:
-                self.__routing_commands["ospf"].append("no mpls ldp sync")
+    # def disable_ldp_sync(self):
+    #     # If the 'mpls ldp sync' command is stored in the command
+    #     if not self.ios_xr:
+    #         if "mpls ldp sync" in self.__routing_commands["ospf"]:
+    #             self.__routing_commands["ospf"].remove("mpls ldp sync")
+    #         else:
+    #             self.__routing_commands["ospf"].append("no mpls ldp sync")
+
+    def __consolidate_bgp_commands(self) -> None:
+
+        if self.ios_xr:
+            keys = ["start", "id", "address_families", "neighbor_group", "ipv4_uni-cast",
+                    "vpn_v4", "neighbor", "redistribute"]
+
+            self.__bgp_commands["vpn_v4"].append("exit")    # To exit out of the neighbor-group command
+
+        else:
+            keys = ["start", "id", "neighbor", "vpn_v4", "redistribute"]
+
+        for key in keys:
+            if self.__bgp_commands[key]:
+                self.__routing_commands["bgp"].extend(self.__bgp_commands[key])
+                self.__bgp_commands[key].clear()
+
+        self.__bgp_commands: dict[str, list[str]] = {
+            "start": [],
+            "id": [],
+            "address_families": [],
+            "ipv4_uni-cast": [],
+            "vpn_v4": [],
+            "neighbor_group": [],
+            "neighbor": [],
+            "redistribute": []
+        }
 
     def begin_ibgp_routing(self) -> None:
-        # Error check
+        # Error check for any missing attributes
         if self.as_number == 0:
             raise ValueError("The AS number for this router hasn't been assigned yet.")
 
         if not self.ibgp_adjacent_router_ids:
             raise ValueError("No adjacent routers are assigned. Please assign a route reflector first.")
 
+        # If there is no MPLS interfaces, print a WARNING message
+        if not self.__any_mpls_interfaces() and self.vrf_list:
+            print_warning("VRF is configured without any MPLS capabilities. MPLS is required for the VPN connection "
+                          "to be established.")
+
         # Starting with the AS number and the ID
-        self.__routing_commands["bgp"]["start"] = [f"router bgp {self.as_number}"]
-        self.__routing_commands["bgp"]["id"] = [
+        self.__bgp_commands["start"] = [f"router bgp {self.as_number}"]
+        self.__bgp_commands["id"] = [
             f"bgp router-id {self.id()}",
             f"bgp cluster-id {self.id()}"
         ]
 
         # In IOS XR Mode
         if self.ios_xr:
-            pass
+            # VPNv4 Communities
+            self.__bgp_commands["address_families"] = [
+                "address-family ipv4 unicast",
+                "exit"
+            ]
+
+            if self.__any_mpls_interfaces():
+                self.__bgp_commands["address_families"].extend([
+                    "address-family vpnv4 unicast",
+                    "exit"
+                ])
+
+                self.__bgp_commands["ipv4_uni-cast"] = ["address-family ipv4 labeled-unicast"]
+                self.__bgp_commands["vpn_v4"] = ["address-family vpnv4 unicast"]
+
+            else:
+                self.__bgp_commands["ipv4_uni-cast"] = ["address-family ipv4 unicast"]
+
+            if self.route_reflector:
+                neighbor_group_name = "RR_TO_CLIENT"
+                # Address-family in neighbor group
+                self.__bgp_commands["ipv4_uni-cast"].extend([
+                    "route-reflector-client",
+                    "default-originate",
+                    "exit"
+                ])
+                if self.__any_mpls_interfaces():
+                    self.__bgp_commands["vpn_v4"].extend([
+                        "route-reflector-client",
+                        "exit"
+                    ])
+
+            else:
+                neighbor_group_name = "CLIENT_TO_RR"
+                # Address-family in neighbor group
+                self.__bgp_commands["ipv4_uni-cast"].extend([
+                    "soft-reconfiguration inbound always",
+                    "exit"
+                ])
+                if self.__any_mpls_interfaces():
+                    self.__bgp_commands["vpn_v4"].extend([
+                        "soft-reconfiguration inbound always",
+                        "exit"
+                    ])
+
+            # Neighbor group establishment
+            self.__bgp_commands["neighbor_group"] = [
+                f"neighbor-group {neighbor_group_name}",
+                f"remote-as {self.as_number}",
+                f"update-source {self.loopback(0)}"
+            ]
+
+            # Assign neighbor group to each adjacent routers to establish neighbor
+            for router_id in self.ibgp_adjacent_router_ids:
+                self.__bgp_commands["neighbor"].extend([
+                    f"neighbor {router_id}",
+                    f"use neighbor-group {neighbor_group_name}",
+                    "exit"
+                ])
+
+            # Redistribution, either through VRF or none
+            if self.vrf_list:
+
+                for rd_number, vrf in self.vrf_list.items():
+                    self.__bgp_commands["redistribute"].extend([
+                        f"vrf {vrf['name']}",
+                        f"rd {self.as_number}:{rd_number}",
+                        "address-family ipv4 unicast",
+                        "label mode per-vrf",
+                        "redistribute connected",
+                        "exit", "exit"
+                    ])
+            else:
+                self.__bgp_commands["address_families"].insert(1, "redistribute connected")
+
         # In IOS XE Mode
         else:
-            # VPNv4 Routing
-            self.__routing_commands["bgp"]["vpn_v4"] = ["address-family vpnv4"]
+            # VPNv4 Communities
+            if self.__any_mpls_interfaces():
+                self.__bgp_commands["vpn_v4"] = ["address-family vpnv4"]
 
+            # Iterating through each adjacent router ID
             for router_id in self.ibgp_adjacent_router_ids:
-                self.__routing_commands["bgp"]["neighbor"].extend([
+                # Neighborhood establishment
+                self.__bgp_commands["neighbor"].extend([
                     f"neighbor {router_id} remote-as {self.as_number}",
-                    f"neighbor {router_id} update-source {self.loopback(0)}"
+                    f"neighbor {router_id} update-source {self.loopback(0)}",
+                    f"neighbor {router_id} route-reflector-client"
                 ])
 
-                self.__routing_commands["bgp"]["vpn_v4"].extend([
-                    f"neighbor {router_id} activate",
-                    f"neighbor {router_id} send-community extended"
-                ])
+                # VPNv4 Communities
+                if self.__any_mpls_interfaces():
+                    self.__bgp_commands["vpn_v4"].extend([
+                        f"neighbor {router_id} activate",
+                        f"neighbor {router_id} send-community extended"
+                    ])
 
-            self.__routing_commands["bgp"]["vpn_v4"].append("exit-address-family")
+            if self.__any_mpls_interfaces():
+                self.__bgp_commands["vpn_v4"].append("exit-address-family")
+
+            # Redistribution, either through VRF or none
+            if self.vrf_list:
+                for vrf in self.vrf_list.values():
+                    self.__bgp_commands["redistribute"].extend([
+                        f"address-family ipv4 vrf {vrf['name']}",
+                        "redistribute connected",
+                        "exit-address-family"
+                    ])
+            else:
+                self.__bgp_commands["redistribute"].append("redistribute connected")
+
+        # Transfer all the BGP commands to a single list
+        self.__consolidate_bgp_commands()
 
     def send_script(self) -> None:
         # Start with 'configure terminal'

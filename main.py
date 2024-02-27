@@ -1,4 +1,3 @@
-from components.interfaces.interface import Interface
 from components.topologies.autonomous_system.autonomous_system import AutonomousSystem, RouterInterface, Router
 
 # Step 1 - Create an Autonomous System
@@ -48,8 +47,8 @@ my_topology = AutonomousSystem(as_number=58587, name="Test Topology", devices=[
         ios_xr=True
     )
 ],
-   route_reflector_id="10.255.255.1"
-)
+                               route_reflector_id="10.255.255.1",
+                               )
 
 # Step 2 - Connect all the devices
 my_topology.connect_devices("10.255.255.1", "0/0/0/0", "10.255.255.2", "0/0/0/0",
@@ -63,10 +62,11 @@ my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1"
 my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2",
                             network_address="10.0.5.0", scr=1220, cable_bandwidth=50000)
 
-my_topology.print_links()   # Show the connections
-print(my_topology.get_device("10.255.255.1").ibgp_adjacent_router_ids)
+my_topology.print_links()  # Show the connections
 
+my_topology["10.255.255.1"].add_vrf(10, "RED", 20)
+my_topology["10.255.255.1"].begin_igp_routing()
+my_topology["10.255.255.1"].begin_ibgp_routing()
+my_topology["10.255.255.1"].send_script()
 # Step 3 - Initialize internal routing
 # my_topology.begin_internal_routing()
-
-
