@@ -11,7 +11,7 @@ my_topology = AutonomousSystem(as_number=58587, name="Test Topology", devices=[
             RouterInterface("GigabitEthernet", "0/0/0/1"),
             RouterInterface("GigabitEthernet", "0/0/0/2")
         ],
-        ios_xr=False
+        ios_xr=True
     ),
 
     Router(

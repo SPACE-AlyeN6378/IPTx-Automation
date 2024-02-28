@@ -196,6 +196,9 @@ class Router(NetworkDevice):
             # If MPLS is enabled in any interfaces, enable LDP synchronization
             if self.__any_mpls_interfaces():
                 self.__routing_commands["ospf"].append("mpls ldp sync")
+                self.__routing_commands["mpls"] = [
+                    "mpls ldp router-id loopback0"
+                ]
 
         self.__routing_commands["ospf"].append("exit")
 
@@ -223,16 +226,7 @@ class Router(NetworkDevice):
                 self.__routing_commands["bgp"].extend(self.__bgp_commands[key])
                 self.__bgp_commands[key].clear()
 
-        self.__bgp_commands: dict[str, list[str]] = {
-            "start": [],
-            "id": [],
-            "address_families": [],
-            "ipv4_uni-cast": [],
-            "vpn_v4": [],
-            "neighbor_group": [],
-            "neighbor": [],
-            "redistribute": []
-        }
+        self.__routing_commands["bgp"].append("exit")
 
     def begin_ibgp_routing(self) -> None:
         # Error check for any missing attributes

@@ -17,10 +17,10 @@ class AutonomousSystem(Topology):
         self.reference_bw: int = 1      # Reference bandwidth in M bits/s
 
         if route_reflector_id:
-            self.route_reflector = route_reflector_id
+            self.route_reflector: str = route_reflector_id
             self.select_route_reflector(route_reflector_id)
         else:
-            self.route_reflector = None
+            self.route_reflector: str | None = None
 
     def print_links(self) -> None:
         links = sorted(self._graph.edges(data=True), key=lambda link: link[2]["scr"])
