@@ -245,8 +245,10 @@ class Router(NetworkDevice):
         self.__bgp_commands["start"] = [f"router bgp {self.as_number}"]
         self.__bgp_commands["id"] = [
             f"bgp router-id {self.id()}",
-            f"bgp cluster-id {self.id()}"
         ]
+
+        if self.route_reflector:
+            self.__bgp_commands["id"].append(f"bgp cluster-id {self.id()}")
 
         # In IOS XR Mode
         if self.ios_xr:
