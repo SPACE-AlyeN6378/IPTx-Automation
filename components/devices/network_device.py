@@ -22,12 +22,32 @@ class NetworkDevice:
     # Print out the script
     @staticmethod
     def print_script(commands: Iterable[str], color=Fore.WHITE):
+
+        indent_size = 0
         for command_line in commands:
 
-            print(f"{color}{command_line}{Style.RESET_ALL}")
+            indent = '  ' * indent_size
 
-            if command_line in ["configure terminal", "exit"] or "hostname" in command_line:
+            if command_line == "exit" or command_line == "exit-address-family":
+                print(f"{color}{indent}!{Style.RESET_ALL}")
+                indent_size -= 1
+            else:
+                print(f"{color}{indent}{command_line}{Style.RESET_ALL}")
+
+            if "hostname" in command_line:
                 print(f'{color}!{Style.RESET_ALL}')
+
+            if (command_line[:9] == "interface" or
+                    command_line[:7] == "router " or
+                    command_line[:5] == "area " or
+                    command_line[:14] == "address-family" or
+                    command_line[:14] == "neighbor-group" or
+                    command_line[:3] == "vrf"):
+
+                print(f"{Fore.RED}BEEP{Style.RESET_ALL}")
+                indent_size += 1
+
+
 
     # Constructor
     def __init__(self, device_id: str = None, hostname: str = "NetworkDevice",
@@ -49,7 +69,10 @@ class NetworkDevice:
         self.add_interface(*interfaces)
 
         # Cisco commands
-        self._basic_commands: CommandsDict = {"hostname": [f"hostname {self.hostname}"]}
+        self._basic_commands: CommandsDict = {
+            "timezone": ["clock timezone Dhaka 6 0"],
+            "hostname": [f"hostname {self.hostname}"]
+        }
 
     # Stringify
     def __str__(self):

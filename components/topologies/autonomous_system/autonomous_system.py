@@ -116,10 +116,9 @@ class AutonomousSystem(Topology):
         else:
             self.get_link(device_id1, device_id2)[2]["network_address"] = None
 
-        # If MPLS is enabled, enable MPLS to all the routers
-        if self.mpls:
-            self[device_id1].interface(port1).mpls_enable()
-            self[device_id2].interface(port2).mpls_enable()
+        # Enable MPLS to all the routers
+        self[device_id1].interface(port1).mpls_enable()
+        self[device_id2].interface(port2).mpls_enable()
 
         # This is an intra-autonomous connection, so EGP is always False
         self.get_link(device_id1, device_id2)[2]["egp"] = False

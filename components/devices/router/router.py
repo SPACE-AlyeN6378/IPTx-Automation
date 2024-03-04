@@ -117,12 +117,8 @@ class Router(NetworkDevice):
             self._basic_commands["vrf"].extend([
                 f"vrf {name}",
                 "address-family ipv4 unicast",
-                "import route-target",
-                f"{self.as_number}:{import_target}",
-                "exit",
-                "export route-target",
-                f"{self.as_number}:{rd_number}",
-                "exit",
+                f"import route-target {self.as_number}:{import_target}",
+                f"export route-target {self.as_number}:{rd_number}",
                 "exit",
                 "exit"
             ])
