@@ -43,8 +43,8 @@ class AutonomousSystem(Topology):
 
     def select_route_reflector(self, router_id: str) -> None:
         # Route-reflection is of no use with a single router
-        if len([router.id() for router in self.get_all_routers()]) == 1:
-            print_warning("This autonomous system only has one router. So there's no use of route-reflecting")
+        if len([router.id() for router in self.get_all_routers()]) <= 2:
+            print_warning("This autonomous system only has one or two routers. So there's no use of route-reflecting")
 
         # The route-reflector attribute is set to True for the router with a matching router ID
         self.route_reflector = router_id

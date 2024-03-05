@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import List, Iterable, Any
 
-
 from iptx_utils import NetworkError
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 from components.interfaces.loopback.loopback import Loopback
@@ -27,12 +26,18 @@ class NetworkDevice:
         for command_line in commands:
 
             indent = '  ' * indent_size
+            allow_indenting_vrf = True
 
-            if command_line == "exit" or command_line == "exit-address-family":
-                print(f"{color}{indent}!{Style.RESET_ALL}")
+            if command_line == "exit":
                 indent_size -= 1
+                indent = '  ' * indent_size
+                print(f"{color}{indent}!{Style.RESET_ALL}")
             else:
                 print(f"{color}{indent}{command_line}{Style.RESET_ALL}")
+                if command_line == "exit-address-family":
+                    indent_size -= 1
+                    indent = '  ' * indent_size
+                    print(f"{color}{indent}!{Style.RESET_ALL}")
 
             if "hostname" in command_line:
                 print(f'{color}!{Style.RESET_ALL}')
@@ -44,10 +49,24 @@ class NetworkDevice:
                     command_line[:14] == "neighbor-group" or
                     command_line[:3] == "vrf"):
 
-                print(f"{Fore.RED}BEEP{Style.RESET_ALL}")
-                indent_size += 1
+                if command_line[:9] == "interface":
+                    allow_indenting_vrf = False
 
+                if command_line[:3] == "vrf":
+                    if allow_indenting_vrf:
+                        indent_size += 1
+                    else:
+                        allow_indenting_vrf = True
+                else:
+                    indent_size += 1
 
+            if command_line[:8] == "neighbor":
+                if not any(substr in command_line for substr in ["remote-as",
+                                                                 "update-source",
+                                                                 "route-reflector",
+                                                                 "activate",
+                                                                 "send-community"]):
+                    indent_size += 1
 
     # Constructor
     def __init__(self, device_id: str = None, hostname: str = "NetworkDevice",

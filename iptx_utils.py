@@ -13,6 +13,12 @@ class NetworkError(Exception):
         super().__init__(self.message)
 
 
+class DeviceError(Exception):
+    def __init__(self, message="There's something wrong with your device"):
+        self.message = message
+        super().__init__(self.message)
+
+
 class SwitchportError(Exception):
     def __init__(self, message="There's something wrong with the switchport"):
         self.message = message
@@ -106,7 +112,11 @@ def print_log(text: str, color_number: int = 2):
 
 
 def print_warning(text: str):
-    print(f"{Fore.YELLOW}WARNING! {text}")
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
+    print(f"{Fore.MAGENTA}{formatted_datetime} | WARNING! {text}")
+
     if input(f"Do you want to continue? (Y/?): {Style.RESET_ALL}").upper() != 'Y':
         exit()
 

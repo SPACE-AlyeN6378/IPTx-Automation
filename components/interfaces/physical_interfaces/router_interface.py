@@ -16,6 +16,7 @@ class RouterInterface(PhysicalInterface):
         # Permanent data types
         self.xr_mode: bool = False
         self.egp: bool = False
+        self.vrf_name: str = ""
 
         # OSPF Attributes
         self.ospf_process_id: int = 0
@@ -180,11 +181,19 @@ class RouterInterface(PhysicalInterface):
 
                 self.__more_ospf_commands[attribute].clear()
 
+            # Command to add VRF
+            if self._cisco_commands["ip address"]:
+                if self.vrf_name:
+                    self._cisco_commands["ip address"].insert(0, f"vrf forwarding {self.vrf_name}")
+
         else:
-            # Replace IP with IPv4 in one of the Cisco command lines
+            # Replace IP with IPv4 in the IP Address section of the command, and add VRF
             if self._cisco_commands["ip address"]:
                 if 'ipv6' not in self._cisco_commands["ip address"][0]:
                     self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
+
+                if self.vrf_name:
+                    self._cisco_commands["ip address"].insert(0, f"vrf {self.vrf_name}")
 
         return super().generate_command_block()
 

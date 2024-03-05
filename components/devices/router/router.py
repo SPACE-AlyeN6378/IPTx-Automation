@@ -5,7 +5,7 @@ from components.interfaces.physical_interfaces.router_interface import RouterInt
 from components.interfaces.loopback.loopback import Loopback
 from typing import Iterable, Dict, List, Set
 
-from iptx_utils import print_warning
+from iptx_utils import print_warning, print_log, DeviceError
 
 
 class Router(NetworkDevice):
@@ -33,6 +33,7 @@ class Router(NetworkDevice):
         self.reference_bw = self.get_max_bandwidth() // 1000
 
         # VRF
+        self.provider_edge = True
         self.vrf_list: Dict[int, Dict[str, int | str]] = dict()
         self._basic_commands.update({
             "vrf": []
@@ -105,6 +106,9 @@ class Router(NetworkDevice):
                 interface.ospf_area = area_number
 
     def add_vrf(self, rd_number: int, name: str, import_target: int) -> None:
+        if not self.provider_edge:
+            raise DeviceError("This is not a provider edge router, so VRF cannot be configured in this device")
+
         if self.as_number == 0:
             raise ValueError("The AS number for this router hasn't been assigned yet.")
 
@@ -139,14 +143,10 @@ class Router(NetworkDevice):
                 if not interface.egp:
                     interface.ospf_config(process_id=self.OSPF_PROCESS_ID, p2p=interface.ospf_p2p)
 
-                # If the interface is for inter-autonomous routing, prevent OSPF adjacency using passive-interface
-                else:
-                    interface.ospf_passive_enable()
-
         for interface in self.all_loopbacks():
             interface.ospf_config(process_id=self.OSPF_PROCESS_ID)
 
-        # Generate Cisco command for during router OSPF configuration
+        # Generate Cisco command for initialization of router OSPF configuration
         self.__routing_commands["ospf"] = [
             f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
             f"router-id {self.id()}",  # Router ID
@@ -163,48 +163,18 @@ class Router(NetworkDevice):
                     # If the physical interface is connected or is just a loopback
                     if interface.int_type == "Loopback":
                         self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
-                    elif interface.remote_device is not None:
+                    elif interface.remote_device is not None and not interface.egp:
                         self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
 
                 self.__routing_commands["ospf"].append("exit")
 
-            # If there is any MPLS
-            if self.__any_mpls_interfaces():
-                self.__routing_commands["mpls"] = [
-                    "mpls ldp",
-                    f"router-id {self.id()}"
-                ]
-
-                for interface in self.all_phys_interfaces():
-                    if interface.mpls_enabled:
-                        self.__routing_commands["mpls"].append(f"interface {str(interface)}")
-                        self.__routing_commands["mpls"].append("exit")
-
-                self.__routing_commands["mpls"].append("exit")
-
         else:  # For IOS routers
-
             # All the EGP interfaces and loopbacks are configured as passive, in the OSPF section
             for interface in self.all_interfaces():
                 if not interface.ospf_allow_hellos:
                     self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
 
-            # If MPLS is enabled in any interfaces, enable LDP synchronization
-            if self.__any_mpls_interfaces():
-                self.__routing_commands["ospf"].append("mpls ldp sync")
-                self.__routing_commands["mpls"] = [
-                    "mpls ldp router-id loopback0"
-                ]
-
         self.__routing_commands["ospf"].append("exit")
-
-    # def disable_ldp_sync(self):
-    #     # If the 'mpls ldp sync' command is stored in the command
-    #     if not self.ios_xr:
-    #         if "mpls ldp sync" in self.__routing_commands["ospf"]:
-    #             self.__routing_commands["ospf"].remove("mpls ldp sync")
-    #         else:
-    #             self.__routing_commands["ospf"].append("no mpls ldp sync")
 
     def __consolidate_bgp_commands(self) -> None:
 
@@ -271,7 +241,6 @@ class Router(NetworkDevice):
                 # Address-family in neighbor group
                 self.__bgp_commands["ipv4_uni-cast"].extend([
                     "route-reflector-client",
-                    "default-originate",
                     "exit"
                 ])
                 if self.__any_mpls_interfaces():
@@ -362,9 +331,38 @@ class Router(NetworkDevice):
         # Transfer all the BGP commands to a single list
         self.__consolidate_bgp_commands()
 
+    def __generate_mpls_command(self) -> None:
+        if self.__any_mpls_interfaces():
+            if self.ios_xr:
+                self.__routing_commands["mpls"] = [
+                    "mpls ldp",
+                    f"router-id {self.id()}"
+                ]
+
+                for interface in self.all_phys_interfaces():
+                    if interface.mpls_enabled:
+                        self.__routing_commands["mpls"].append(f"interface {str(interface)}")
+                        self.__routing_commands["mpls"].append("exit")
+
+                self.__routing_commands["mpls"].append("exit")
+
+            else:
+                # If MPLS is enabled in any interfaces, enable LDP synchronization
+                if self.__any_mpls_interfaces():
+                    self.__routing_commands["ospf"].insert(1, "mpls ldp sync")
+                    self.__routing_commands["mpls"] = [
+                        "mpls ldp router-id loopback0",
+                        "mpls label protocol ldp"
+                    ]
+
     def send_script(self) -> None:
+        print_log("Building configuration...")
+
         # Start with 'configure terminal'
         script = ["configure terminal"]
+
+        # Generate a script for any MPLS routing
+        self.__generate_mpls_command()
 
         # Iterate through each cisco command by key
         for attr in self._basic_commands.keys():
@@ -387,4 +385,4 @@ class Router(NetworkDevice):
             script.append("commit")
 
         script.append("end")
-        NetworkDevice.print_script(script, Fore.WHITE)
+        NetworkDevice.print_script(script, Fore.YELLOW)
