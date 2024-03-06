@@ -64,11 +64,16 @@ my_topology.connect_devices("10.255.255.4", "0/0/0/2", "10.255.255.2", "0/0/0/2"
 
 my_topology.print_links()  # Show the connections
 
-my_topology["10.255.255.2"].add_vrf(10, "RED", 20)
-my_topology["10.255.255.2"].interface("0/0/0/0").vrf_name = "ALLAHU-AKBAR"
-my_topology["10.255.255.2"].begin_igp_routing()
-my_topology["10.255.255.2"].begin_ibgp_routing()
-my_topology["10.255.255.2"].send_script()
+my_topology.add_vrf("RED")
+my_topology.add_vrf("GREEN")
+my_topology.add_vrf("BLUE")
+my_topology.vpn_connection()
 
-# Step 3 - Initialize internal routing
-# my_topology.begin_internal_routing()
+print(my_topology.get_vrf(rd=2))
+
+
+# my_topology["10.255.255.2"].add_vrf(10, "RED", 20)
+# my_topology["10.255.255.2"].interface("0/0/0/0").vrf_name = "ALLAHU-AKBAR"
+# # my_topology["10.255.255.2"].begin_igp_routing()
+# # my_topology["10.255.255.2"].begin_ibgp_routing()
+# my_topology["10.255.255.2"].send_script()

@@ -23,10 +23,10 @@ class NetworkDevice:
     def print_script(commands: Iterable[str], color=Fore.WHITE):
 
         indent_size = 0
-        for command_line in commands:
+        allow_indenting_vrf = True
+        for index, command_line in enumerate(commands):
 
             indent = '  ' * indent_size
-            allow_indenting_vrf = True
 
             if command_line == "exit":
                 indent_size -= 1
@@ -49,7 +49,7 @@ class NetworkDevice:
                     command_line[:14] == "neighbor-group" or
                     command_line[:3] == "vrf"):
 
-                if command_line[:9] == "interface":
+                if command_line[:9] == "interface" and "vrf" in commands[index+1]:
                     allow_indenting_vrf = False
 
                 if command_line[:3] == "vrf":
@@ -175,6 +175,10 @@ class NetworkDevice:
             raise ValueError(f"ERROR: '{new_hostname}' is not a valid hostname")
 
         self.hostname = new_hostname
+
+        # Change the device hostname in interfaces too
+        for interface in self.all_interfaces():
+            interface.device_hostname = new_hostname
 
         # Update the dictionary of cisco commands
         self._basic_commands["hostname"] = [f"hostname {self.hostname}"]

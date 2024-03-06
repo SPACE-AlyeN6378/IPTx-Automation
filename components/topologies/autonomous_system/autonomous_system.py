@@ -1,8 +1,9 @@
-from components.topologies.topology import Topology, Switch, Router
+from components.topologies.topology import Topology, Switch, Router, plt
+import networkx as nx
 from components.interfaces.physical_interfaces.router_interface import RouterInterface
-from typing import Iterable
+from typing import Iterable, List, Dict, Any
 
-from iptx_utils import NetworkError, print_log, print_table, print_warning, print_success
+from iptx_utils import NetworkError, NotFoundError, print_log, print_table, print_warning, print_success
 
 
 class AutonomousSystem(Topology):
@@ -12,6 +13,7 @@ class AutonomousSystem(Topology):
 
         print(f"\n==================== AUTONOMOUS SYSTEM {as_number}: '{name}' ====================\n")
         super().__init__(as_number, devices)
+
         self.name: str = name
         self.mpls: bool = mpls
         self.reference_bw: int = 1      # Reference bandwidth in M bits/s
@@ -21,6 +23,10 @@ class AutonomousSystem(Topology):
             self.select_route_reflector(route_reflector_id)
         else:
             self.route_reflector: str | None = None
+
+        # VPN Configuration
+        self.__vpn_graph = nx.MultiDiGraph()
+        self.__vrf_index = 0
 
     def print_links(self) -> None:
         links = sorted(self._graph.edges(data=True), key=lambda link: link[2]["scr"])
@@ -60,13 +66,6 @@ class AutonomousSystem(Topology):
 
         print_success(f"{self.get_device(router_id)} with ID {router_id} chosen as Route-reflector client")
         self.get_device(router_id).set_hostname(self.get_device(router_id).hostname + "-RR")
-
-    def begin_internal_routing(self) -> None:
-        for router in self.get_all_routers():
-            print_log(f"Beginning route in {str(router)}...")
-            router.reference_bw = self.reference_bw
-            router.begin_igp_routing()
-            router.send_script()
 
     def assign_network_ip_address(self, network_address: str,
                                   device_id1: str = None,
@@ -122,3 +121,55 @@ class AutonomousSystem(Topology):
 
         # This is an intra-autonomous connection, so EGP is always False
         self.get_link(device_id1, device_id2)[2]["egp"] = False
+
+    def get_all_vrfs(self, name_only: bool = False) -> List[tuple[int, Dict[str, Any]] | str]:
+        if name_only:
+            return [data["name"] for rd, data in self.__vpn_graph.nodes(data=True)]
+
+        return self.__vpn_graph.nodes(data=True)
+
+    def get_vrf(self, name: str = None, rd: int = None) -> tuple[int, Dict[str, Any]]:
+        if name is not None:
+            for rd_, data in self.__vpn_graph.nodes(data=True):
+                if name == data["name"]:
+                    return rd_, data
+
+            raise NotFoundError(f"VRF with name '{name}' cannot be found")
+
+        elif rd is not None:
+            try:
+                return rd, self.__vpn_graph.nodes[rd]
+            except KeyError:
+                raise NotFoundError(f"VRF with RD '{rd}' cannot be found")
+
+    def add_vrf(self, vrf_name: str, device_id: str, port: str) -> None:
+        # Check for any existing names
+        if vrf_name in self.get_all_vrfs(name_only=True):
+            raise NetworkError(f"VRF with name '{vrf_name}' already exists")
+
+        rd = len(self.get_all_vrfs(name_only=True)) + 1
+        self.__vpn_graph.add_node(rd, name=vrf_name)    # rd = route-distinguisher
+
+    def vpn_connection(self) -> None:
+        self.__vpn_graph.add_edge(1, 2)
+        self.__vpn_graph.add_edge(2, 1)
+        self.__vpn_graph.add_edge(2, 3)
+        self.__vpn_graph.add_edge(3, 1)
+
+    def show_vpn_graph(self) -> None:
+        pos = nx.spring_layout(self.__vpn_graph)  # Positions for all nodes
+        nx.draw(self.__vpn_graph, pos, with_labels=True, arrows=True, width=2, node_size=1000,
+                labels={node_id: data["name"] for node_id, data in self.__vpn_graph.nodes(data=True)})
+        plt.show()
+
+    def begin_internal_routing(self) -> None:
+        for router in self.get_all_routers():
+            print_log(f"Beginning route in {str(router)}...")
+            router.reference_bw = self.reference_bw
+            router.begin_igp_routing()
+            router.send_script()
+
+
+
+
+
