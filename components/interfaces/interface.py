@@ -84,6 +84,9 @@ class Interface:
         else:
             return f"{self.int_type}{self.port}"
 
+    def __repr__(self):
+        return str(self)
+
     # Equality (for identification)
     def __eq__(self, other):
         if isinstance(other, Interface):

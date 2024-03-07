@@ -31,12 +31,14 @@ class AutonomousSystem(Topology):
     def print_links(self) -> None:
         links = sorted(self._graph.edges(data=True), key=lambda link: link[2]["scr"])
         table = [[
-            f"SCR: {edge[2]['scr']}",
+            str(edge[2]['scr']),
             f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})",
-            f"Network IP: {edge[2]['network_address']}",
-            f"Bandwidth: {edge[2]['bandwidth']} KB/s",
-            f"External: {edge[2]['egp']}"
+            edge[2]['network_address'],
+            f"{edge[2]['bandwidth']} KB/s",
+            str(edge[2]['egp'])
         ] for edge in links]
+
+        table.insert(0, ["SCR", "Source/Destination", "Network IP", "Bandwidth", "External?"])
 
         print()
         print_log("The following connections have been established:")
@@ -128,33 +130,96 @@ class AutonomousSystem(Topology):
 
         return self.__vpn_graph.nodes(data=True)
 
-    def get_vrf(self, name: str = None, rd: int = None) -> tuple[int, Dict[str, Any]]:
-        if name is not None:
+    def get_vrf(self, rd_or_name: str | int) -> tuple[int, Dict[str, Any]]:
+        if isinstance(rd_or_name, str):
             for rd_, data in self.__vpn_graph.nodes(data=True):
-                if name == data["name"]:
+                if rd_or_name == data["name"]:
                     return rd_, data
 
             raise NotFoundError(f"VRF with name '{name}' cannot be found")
 
-        elif rd is not None:
+        else:
             try:
-                return rd, self.__vpn_graph.nodes[rd]
+                return rd_or_name, self.__vpn_graph.nodes[rd_or_name]
             except KeyError:
-                raise NotFoundError(f"VRF with RD '{rd}' cannot be found")
+                raise NotFoundError(f"VRF with RD '{rd_or_name}' cannot be found")
 
-    def add_vrf(self, vrf_name: str, device_id: str, port: str) -> None:
+    def add_vrf(self, vrf_name: str, device_id: str = None, port: str = None) -> None:
         # Check for any existing names
         if vrf_name in self.get_all_vrfs(name_only=True):
             raise NetworkError(f"VRF with name '{vrf_name}' already exists")
 
-        rd = len(self.get_all_vrfs(name_only=True)) + 1
-        self.__vpn_graph.add_node(rd, name=vrf_name)    # rd = route-distinguisher
+        if device_id and port:
+            device = self.get_device(device_id)
+            interface = device.interface(port)
 
-    def vpn_connection(self) -> None:
-        self.__vpn_graph.add_edge(1, 2)
-        self.__vpn_graph.add_edge(2, 1)
-        self.__vpn_graph.add_edge(2, 3)
-        self.__vpn_graph.add_edge(3, 1)
+            # VRF Replacement
+            if interface.vrf_name:
+                raise NetworkError(f"Interface {interface} at {device} already has a VRF. "
+                                   f"Please remove the VRF from the interface first.")
+
+        else:
+            device = interface = None
+
+        rd = len(self.get_all_vrfs(name_only=True)) + 1     # rd = route-distinguisher
+        self.__vpn_graph.add_node(rd, name=vrf_name, device=device, interface=interface)
+
+    def remove_vrf(self, rd_or_name: str | int) -> None:
+        if isinstance(rd_or_name, str):
+            rd_or_name = self.get_vrf(rd_or_name)[0]
+
+        self.__vpn_graph.remove_node(rd_or_name)
+
+    def set_interface_in_vrf(self, rd_or_name: int | str, device_id: str, port: str):
+        device = self.get_device(device_id)
+        interface = device.interface(port)
+
+        # Can't replace VRF in an interface
+        if interface.vrf_name:
+            raise NetworkError(f"Interface {interface} at {device} already has a VRF. "
+                               f"Please de-assign the VRF from the interface first.")
+
+        # If VRF name is used, get the corresponding VRFs
+        if isinstance(rd_or_name, str):
+            rd_or_name = self.get_vrf(rd_or_name)[0]
+
+        # If the VRF is already assigned in another router
+        for vrf in self.__vpn_graph.nodes(data=True):
+            if interface == vrf[1]["interface"] and device == vrf[1]["device"]:
+                vrf[1]["device"] = None
+                vrf[1]["interface"] = None
+
+        self.__vpn_graph.nodes[rd_or_name]['device'] = device
+        self.__vpn_graph.nodes[rd_or_name]['interface'] = interface
+
+    def print_vrfs(self) -> None:
+        vrfs = sorted(self.__vpn_graph.nodes(data=True))
+        table = [
+            [
+                str(vrf[0]),
+                str(vrf[1]['name']),
+                str(vrf[1]['device']),
+                str(vrf[1]['interface'])
+            ]
+            for vrf in vrfs
+        ]
+
+        table.insert(0, ["RD", "VRF Name", "Device", "Interface"])
+
+        print()
+        print_log("The following VRFs are created:")
+        print_table(table)
+        print()
+
+    def vpn_connection(self, source: int | str, destination: int | str) -> None:
+
+        if isinstance(source, str):
+            source = self.get_vrf(source)[0]
+
+        if isinstance(destination, str):
+            destination = self.get_vrf(destination)[0]
+
+        self.__vpn_graph.add_edge(source, destination)
 
     def show_vpn_graph(self) -> None:
         pos = nx.spring_layout(self.__vpn_graph)  # Positions for all nodes

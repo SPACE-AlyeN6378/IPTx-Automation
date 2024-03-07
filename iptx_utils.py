@@ -133,6 +133,11 @@ def print_table(data):
     # Find the maximum length of each column
     col_width = [max(len(str(item)) for item in col) for col in zip(*data)]
 
+    # Print the table header
+    header = data[0]
+    print(" | ".join("{:{width}}".format(item, width=width) for item, width in zip(header, col_width)))
+    print("-" * (sum(col_width) + len(col_width) * 3 - 1))
+
     # Print the table with consistent spacing
-    for row in data:
+    for row in data[1:]:
         print(" | ".join("{:{width}}".format(item, width=width) for item, width in zip(row, col_width)))

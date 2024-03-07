@@ -97,6 +97,9 @@ class NetworkDevice:
     def __str__(self):
         return f"Device '{self.hostname}'"
 
+    def __repr__(self):
+        return str(self)
+
     # The equal and hashable operator are for identification
     def __eq__(self, other):
         if isinstance(other, NetworkDevice):
@@ -176,10 +179,6 @@ class NetworkDevice:
 
         self.hostname = new_hostname
 
-        # Change the device hostname in interfaces too
-        for interface in self.all_interfaces():
-            interface.device_hostname = new_hostname
-
         # Update the dictionary of cisco commands
         self._basic_commands["hostname"] = [f"hostname {self.hostname}"]
 
@@ -191,13 +190,7 @@ class NetworkDevice:
 
         # Loop through each new interfaces
         for interface in new_interfaces:
-            # First, you check for matching port number and Network IP, to avoid overlapping
-            if interface.ip_address and interface.subnet_mask:
-                networks = [inf.network_address() for inf in self.all_interfaces() if inf.ip_address]
-                if interface.network_address() in networks:
-                    raise NetworkError(f"ERROR: Overlapping networks in '{str(interface)}'")
-
-            # For Connectors and Cables
+            # Cannot contain duplicate ports
             if isinstance(interface, PhysicalInterface):
                 ports = [inf.port for inf in self.__phys_interfaces]
 
@@ -225,6 +218,14 @@ class NetworkDevice:
             self.__loopbacks.remove(interface)
 
         return interface
+
+    def check_for_duplicate_network_address(self):
+        for interface in self.__phys_interfaces:
+            if interface.ip_address and interface.subnet_mask:
+                networks = [inf.network_address() for inf in self.all_interfaces() if inf.ip_address]
+
+                if interface.network_address() in networks:
+                    raise NetworkError(f"ERROR: Overlapping networks in '{str(interface)}'")
 
     # Generate a complete configuration script
     def send_script(self) -> None:
