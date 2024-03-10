@@ -70,6 +70,7 @@ class Interface:
 
         # Cisco IOS commands
         self._cisco_commands = {
+            "vrf": [],  # Will be used in routers and switches, not here
             "ip address": [],
             "description": []
         }

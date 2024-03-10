@@ -136,7 +136,7 @@ class AutonomousSystem(Topology):
                 if rd_or_name == data["name"]:
                     return rd_, data
 
-            raise NotFoundError(f"VRF with name '{name}' cannot be found")
+            raise NotFoundError(f"VRF with name '{rd_or_name}' cannot be found")
 
         else:
             try:
@@ -153,11 +153,6 @@ class AutonomousSystem(Topology):
             device = self.get_device(device_id)
             interface = device.interface(port)
 
-            # VRF Replacement
-            if interface.vrf_name:
-                raise NetworkError(f"Interface {interface} at {device} already has a VRF. "
-                                   f"Please remove the VRF from the interface first.")
-
         else:
             device = interface = None
 
@@ -173,11 +168,6 @@ class AutonomousSystem(Topology):
     def set_interface_in_vrf(self, rd_or_name: int | str, device_id: str, port: str):
         device = self.get_device(device_id)
         interface = device.interface(port)
-
-        # Can't replace VRF in an interface
-        if interface.vrf_name:
-            raise NetworkError(f"Interface {interface} at {device} already has a VRF. "
-                               f"Please de-assign the VRF from the interface first.")
 
         # If VRF name is used, get the corresponding VRFs
         if isinstance(rd_or_name, str):

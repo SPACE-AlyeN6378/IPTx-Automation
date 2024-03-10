@@ -371,6 +371,7 @@ class Router(NetworkDevice):
             script.extend(self._basic_commands[attr])
             self._basic_commands[attr].clear()
 
+
         # Iterate through each interface
         for interface in self.all_interfaces():
             script.extend(interface.generate_command_block())

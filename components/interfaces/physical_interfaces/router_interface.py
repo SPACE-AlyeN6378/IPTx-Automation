@@ -56,6 +56,32 @@ class RouterInterface(PhysicalInterface):
 
         return str(ip1)+'/30', str(ip2)+'/30'
 
+    def assign_vrf(self, vrf_name: str) -> None:
+        self.vrf_name = vrf_name
+
+        # Command to add VRF
+        if self.xr_mode:
+            self._cisco_commands["vrf"] = ["vrf " + vrf_name]
+        else:
+            self._cisco_commands["vrf"] = ["vrf forwarding " + vrf_name]
+
+        # And to reassign the IP Address
+        if self.ip_address and self.subnet_mask:
+            self._cisco_commands["ip_address"] = f"ip address {self.ip_address}"
+
+    def remove_vrf(self):
+        self.vrf_name = None
+
+        # Command to remove VRF
+        if self._cisco_commands["vrf"]:  # If the command hasn't been sent yet
+            self._cisco_commands["vrf"].clear()
+
+        else:
+            if self.xr_mode:
+                self._cisco_commands["vrf"] = [f"no vrf {self.vrf_name}"]
+            else:
+                self._cisco_commands["vrf"] = [f"no vrf forwarding {self.vrf_name}"]
+
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
 
         # ===================== ERROR HANDLING =======================================================
@@ -181,19 +207,11 @@ class RouterInterface(PhysicalInterface):
 
                 self.__more_ospf_commands[attribute].clear()
 
-            # Command to add VRF
-            if self._cisco_commands["ip address"]:
-                if self.vrf_name:
-                    self._cisco_commands["ip address"].insert(0, f"vrf forwarding {self.vrf_name}")
-
         else:
             # Replace IP with IPv4 in the IP Address section of the command, and add VRF
             if self._cisco_commands["ip address"]:
                 if 'ipv6' not in self._cisco_commands["ip address"][0]:
                     self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
-
-                if self.vrf_name:
-                    self._cisco_commands["ip address"].insert(0, f"vrf {self.vrf_name}")
 
         return super().generate_command_block()
 
