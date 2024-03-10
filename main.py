@@ -62,18 +62,29 @@ my_topology.connect_devices("10.255.255.4", "0/0/0/1", "10.255.255.1", "0/0/0/1"
 
 my_topology.print_links()  # Show the connections
 
-my_topology.add_vrf("RED", "10.255.255.1", "0/0/0/2")
-my_topology.add_vrf("GREEN", "10.255.255.2", "0/0/0/2")
-my_topology.add_vrf("BLUE", "10.255.255.3", "0/0/0/2")
+my_topology.add_vrf("INDIGO", "10.255.255.1", "0/0/0/2")
+my_topology.add_vrf("CORAL")
+my_topology.add_vrf("TEAL")
+my_topology.add_vrf("LAVENDER")
+my_topology.add_vrf("RUBY")
+# my_topology.add_vrf("EMERALD")
+# my_topology.add_vrf("SAPPHIRE")
+# my_topology.add_vrf("AMBER")
+# my_topology.add_vrf("CYAN")
+# my_topology.add_vrf("MAROON")
+# my_topology.add_vrf("TURQUOISE")
+# my_topology.add_vrf("CRIMSON")
+# my_topology.add_vrf("PLUM")
+# my_topology.add_vrf("GOLD")
+# my_topology.add_vrf("SILVER")
+# my_topology.add_vrf("OLIVE")
 
-my_topology.vpn_connection("RED", "GREEN")
-my_topology.vpn_connection("GREEN", "BLUE")
+my_topology.vrf_full_mesh()
 
+my_topology.set_interface_in_vrf("CORAL", "10.255.255.1", "0/0/0/2")
 my_topology.print_vrfs()
-my_topology.set_interface_in_vrf("BLUE", "10.255.255.1", "0/0/0/2")
-my_topology.print_vrfs()
-my_topology.remove_vrf(2)
-my_topology.print_vrfs()
+
+my_topology.show_vpn_graph()
 
 # my_topology["10.255.255.2"].add_vrf(10, "RED", 20)
 # my_topology["10.255.255.2"].interface("0/0/0/0").vrf_name = "ALLAHU-AKBAR"
