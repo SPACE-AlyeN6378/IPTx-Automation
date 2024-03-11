@@ -16,7 +16,6 @@ class RouterInterface(PhysicalInterface):
         # Permanent data types
         self.xr_mode: bool = False
         self.egp: bool = False
-        self.vrf_name: str = ""
 
         # OSPF Attributes
         self.ospf_process_id: int = 0
@@ -27,8 +26,10 @@ class RouterInterface(PhysicalInterface):
         self.__md5_auth_enabled: bool = False
         self.__md5_passwords: Dict[int, str] = dict()
 
-        # MPLS Attributes
+        # VPN Attributes
         self.mpls_enabled: bool = False
+        self.vrf_name: str = ""
+        self.static_routing: bool = False
 
         self._cisco_commands.update({
             "ospf": [],
@@ -58,16 +59,16 @@ class RouterInterface(PhysicalInterface):
 
     def assign_vrf(self, vrf_name: str) -> None:
         self.vrf_name = vrf_name
+        if not self.egp:
+            self.egp = True
 
         # Command to add VRF
         if self.xr_mode:
             self._cisco_commands["vrf"] = ["vrf " + vrf_name]
+            self._cisco_commands["ip_address"] = f"ipv4 address {self.ip_address} {self.subnet_mask}"
         else:
             self._cisco_commands["vrf"] = ["vrf forwarding " + vrf_name]
-
-        # And to reassign the IP Address
-        if self.ip_address and self.subnet_mask:
-            self._cisco_commands["ip_address"] = f"ip address {self.ip_address}"
+            self._cisco_commands["ip_address"] = f"ip address {self.ip_address} {self.subnet_mask}"
 
     def remove_vrf(self):
         self.vrf_name = None
@@ -79,8 +80,10 @@ class RouterInterface(PhysicalInterface):
         else:
             if self.xr_mode:
                 self._cisco_commands["vrf"] = [f"no vrf {self.vrf_name}"]
+                self._cisco_commands["ip_address"] = f"ipv4 address {self.ip_address} {self.subnet_mask}"
             else:
                 self._cisco_commands["vrf"] = [f"no vrf forwarding {self.vrf_name}"]
+                self._cisco_commands["ip_address"] = f"ip address {self.ip_address} {self.subnet_mask}"
 
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
 
@@ -112,8 +115,8 @@ class RouterInterface(PhysicalInterface):
                     self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
 
         else:   # In EGP mode
-            print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems, "
-                  f"so OSPF cannot be configured{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems "
+                  f"or configured as VRF, so OSPF cannot be configured{Style.RESET_ALL}")
 
     def ospf_passive_enable(self):
         self.ospf_allow_hellos = False
