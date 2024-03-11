@@ -141,3 +141,4 @@ def print_table(data):
     # Print the table with consistent spacing
     for row in data[1:]:
         print(" | ".join("{:{width}}".format(item, width=width) for item, width in zip(row, col_width)))
+
