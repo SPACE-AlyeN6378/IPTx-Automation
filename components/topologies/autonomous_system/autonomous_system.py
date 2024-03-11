@@ -200,7 +200,7 @@ class AutonomousSystem(Topology):
         print_table(table)
         print()
 
-    def vpn_connection(self, source: int | str, destination: int | str, two_way=False) -> None:
+    def vpn_connection(self, source: int | str, destination: int | str, allow_log: bool=True) -> None:
 
         # If a name is passed for the VRF source, take the corresponding RD
         if isinstance(source, str):
@@ -217,20 +217,26 @@ class AutonomousSystem(Topology):
 
         self.__vpn_graph.add_edge(source, destination)
 
-        if two_way:
-            # Prevent duplicate edges for the other way around
-            if self.__vpn_graph.has_edge(destination, source):
-                raise ValueError(f"Connection from {self.__vpn_graph.nodes[destination]['name']} to "
-                                 f"{self.__vpn_graph.nodes[source]['name']} already exists.")
-
-            self.__vpn_graph.add_edge(destination, source)
-
-            print_log(f"VRF Route-target: {self.__vpn_graph.nodes[source]['name']} <---> "
-                      f"{self.__vpn_graph.nodes[destination]['name']}", 0)
-
-        else:
+        if allow_log:
             print_log(f"VRF Route-target: {self.__vpn_graph.nodes[source]['name']} ---> "
                       f"{self.__vpn_graph.nodes[destination]['name']}", 0)
+
+    def vpn_two_way_connection(self, vrf1: int | str, vrf2: int | str) -> None:
+        # If a name is passed for the VRF 1, take the corresponding RD
+        if isinstance(vrf1, str):
+            source = self.get_vrf(vrf1)[0]
+
+        # If a name is passed for the VRF 2, take the corresponding RD
+        if isinstance(vrf2, str):
+            destination = self.get_vrf(vrf2)[0]
+
+        # Use the previous function to establish route-targets, but do not print the log
+        self.vpn_connection(vrf1, vrf2, allow_log=False)
+        self.vpn_connection(vrf1, vrf2, allow_log=False)
+
+        # Log-printing will be used here
+        print_log(f"VRF Route-target: {self.__vpn_graph.nodes[vrf1]['name']} <---> "
+                  f"{self.__vpn_graph.nodes[vrf2]['name']}", 0)
 
     def vrf_hub_and_spoke(self, hub: int | str, allow_print_log=True) -> None:
         if isinstance(hub, str):
@@ -241,14 +247,14 @@ class AutonomousSystem(Topology):
 
         for rd in self.__vpn_graph.nodes():
             if rd != hub:
-                self.vpn_connection(hub, rd, two_way=True)
+                self.vpn_two_way_connection(hub, rd)
 
     def vrf_full_mesh(self) -> None:
 
         print_log(f"VRF Full mesh confirmed")
         edges = list(permutations(self.__vpn_graph.nodes(), 2))
-        for src, dest in edges:
-            self.vpn_connection(src, dest)
+        for src, destination in edges:
+            self.vpn_connection(src, destination)
 
     def show_vpn_graph(self) -> None:
         pos = nx.spring_layout(self.__vpn_graph)  # Positions for all nodes
