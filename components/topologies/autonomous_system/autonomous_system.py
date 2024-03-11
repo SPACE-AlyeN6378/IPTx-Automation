@@ -232,7 +232,7 @@ class AutonomousSystem(Topology):
 
         # Use the previous function to establish route-targets, but do not print the log
         self.vpn_connection(vrf1, vrf2, allow_log=False)
-        self.vpn_connection(vrf1, vrf2, allow_log=False)
+        self.vpn_connection(vrf2, vrf1, allow_log=False)
 
         # Log-printing will be used here
         print_log(f"VRF Route-target: {self.__vpn_graph.nodes[vrf1]['name']} <---> "
