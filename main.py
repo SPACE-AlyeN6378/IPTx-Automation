@@ -79,15 +79,11 @@ my_topology.add_vrf("RUBY")
 # my_topology.add_vrf("SILVER")
 # my_topology.add_vrf("OLIVE")
 
-my_topology.vrf_full_mesh()
+my_topology.vrf_hub_and_spoke("TEAL")
 
 my_topology.set_interface_in_vrf("CORAL", "10.255.255.1", "0/0/0/2")
-my_topology.print_vrfs()
 
-my_topology.show_vpn_graph()
+my_topology["10.255.255.1"].send_script(print_to_console=False)
+my_topology["10.255.255.1"].add_vrf(34, "ROBI")
+my_topology["10.255.255.1"].send_script()
 
-# my_topology["10.255.255.2"].add_vrf(10, "RED", 20)
-# my_topology["10.255.255.2"].interface("0/0/0/0").vrf_name = "ALLAHU-AKBAR"
-# # my_topology["10.255.255.2"].begin_igp_routing()
-# # my_topology["10.255.255.2"].begin_ibgp_routing()
-# my_topology["10.255.255.2"].send_script()
