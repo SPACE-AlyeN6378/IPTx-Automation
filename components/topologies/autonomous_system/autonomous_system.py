@@ -64,8 +64,8 @@ class AutonomousSystem(Topology):
             # router_id --> ID of route-reflector router
             # router.id() --> ID of other routers
             if router_id != router.id():
-                router.ibgp_adjacent_router_ids.append(router_id)
-                self.get_device(router_id).ibgp_adjacent_router_ids.append(router.id())
+                router.ibgp_adjacent_router_ids.add(router_id)
+                self.get_device(router_id).ibgp_adjacent_router_ids.add(router.id())
 
         print_success(f"{self.get_device(router_id)} with ID {router_id} chosen as Route-reflector client")
         self.get_device(router_id).set_hostname(self.get_device(router_id).hostname + "-RR")
@@ -238,23 +238,27 @@ class AutonomousSystem(Topology):
         print_log(f"VRF Route-target: {self.__vpn_graph.nodes[vrf1]['name']} <---> "
                   f"{self.__vpn_graph.nodes[vrf2]['name']}", 0)
 
-    def vrf_hub_and_spoke(self, hub: int | str, allow_print_log=True) -> None:
+    def vrf_hub_and_spoke(self, hub: int | str) -> None:
         if isinstance(hub, str):
             hub = self.get_vrf(hub)[0]
 
-        if allow_print_log:
-            print_log(f"VRF Hub and spoke confirmed, with {self.__vpn_graph.nodes[hub]['name']} as the hub")
+        print_log(f"VRF Hub and spoke confirmed, with {self.__vpn_graph.nodes[hub]['name']} as the hub")
 
         for rd in self.__vpn_graph.nodes():
             if rd != hub:
                 self.vpn_two_way_connection(hub, rd)
+
+        print()
 
     def vrf_full_mesh(self) -> None:
 
         print_log(f"VRF Full mesh confirmed")
         edges = list(permutations(self.__vpn_graph.nodes(), 2))
         for src, destination in edges:
-            self.vpn_connection(src, destination)
+            self.vpn_connection(src, destination, allow_log=False)
+
+        print_log(f"VRF Route-target: ALL <---> ALL", 0)
+        print()
 
     def show_vpn_graph(self) -> None:
         pos = nx.spring_layout(self.__vpn_graph)  # Positions for all nodes

@@ -64,11 +64,10 @@ my_topology.print_links()  # Show the connections
 
 my_topology.add_vrf("INDIGO", "10.255.255.1", "0/0/0/2")
 my_topology.add_vrf("CORAL")
-my_topology.add_vrf("TEAL")
 my_topology.add_vrf("LAVENDER")
 my_topology.add_vrf("RUBY")
-# my_topology.add_vrf("EMERALD")
-# my_topology.add_vrf("SAPPHIRE")
+my_topology.add_vrf("EMERALD")
+my_topology.add_vrf("SAPPHIRE")
 # my_topology.add_vrf("AMBER")
 # my_topology.add_vrf("CYAN")
 # my_topology.add_vrf("MAROON")
@@ -79,11 +78,15 @@ my_topology.add_vrf("RUBY")
 # my_topology.add_vrf("SILVER")
 # my_topology.add_vrf("OLIVE")
 
-my_topology.vrf_hub_and_spoke("TEAL")
+my_topology.vrf_hub_and_spoke("EMERALD")
 
 my_topology.set_interface_in_vrf("CORAL", "10.255.255.1", "0/0/0/2")
 
-my_topology["10.255.255.1"].send_script(print_to_console=False)
-my_topology["10.255.255.1"].add_vrf(34, "ROBI")
-my_topology["10.255.255.1"].send_script()
+my_topology.print_vrfs()
+
+my_topology.show_vpn_graph()
+
+# my_topology["10.255.255.1"].send_script(print_to_console=False)
+# my_topology["10.255.255.1"].add_vrf(34, "ROBI")
+# my_topology["10.255.255.1"].send_script()
 

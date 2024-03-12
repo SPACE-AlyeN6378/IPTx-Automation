@@ -88,7 +88,7 @@ class NetworkDevice:
         self.add_interface(*interfaces)
 
         # Cisco commands
-        self._basic_commands: CommandsDict = {
+        self._starter_commands: CommandsDict = {
             "timezone": ["clock timezone Dhaka 6 0"],
             "hostname": [f"hostname {self.hostname}"]
         }
@@ -180,7 +180,7 @@ class NetworkDevice:
         self.hostname = new_hostname
 
         # Update the dictionary of cisco commands
-        self._basic_commands["hostname"] = [f"hostname {self.hostname}"]
+        self._starter_commands["hostname"] = [f"hostname {self.hostname}"]
 
     # Adds the interfaces
     def add_interface(self, *new_interfaces: PhysicalInterface | Loopback) -> None:
@@ -233,11 +233,11 @@ class NetworkDevice:
         script = ["configure terminal"]
 
         # Iterate through each cisco command by key
-        for attr in self._basic_commands.keys():
+        for attr in self._starter_commands.keys():
             # Add the cisco commands to the script and clear it, so that it doesn't have to be
             # added again, until any of the attributes have changed
-            script.extend(self._basic_commands[attr])
-            self._basic_commands[attr].clear()
+            script.extend(self._starter_commands[attr])
+            self._starter_commands[attr].clear()
 
         """
         NOTE: For this configuration, only the hostname configuration is added. There are more lines of code in routers
