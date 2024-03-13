@@ -158,8 +158,7 @@ class Router(NetworkDevice):
                     f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
                     "address-family ipv4 unicast",
                     "exit",
-                    "exit",
-
+                    "exit"
                 ]
 
         for rt in new_rts:
@@ -168,13 +167,38 @@ class Router(NetworkDevice):
             else:
                 command = f"route-target export {self.as_number}:{rt}"
 
-            self.__vrf_commands[rd_number].insert(-2, command)
+            self.__vrf_commands[rd_number].insert(-3, command)
 
     def del_route_target(self, rd_number: int, rt_to_be_removed: int) -> None:
         self.vrfs[rd_number][VRFKey.IMPORT].discard(rt_to_be_removed)
 
-        if self.ibgp_adjacent_router_ids:   # If BGP is configured in router
-            reset
+        if not self.__vrf_commands[rd_number]:
+            if self.ios_xr:
+                self.__vrf_commands[rd_number] = [
+                    f"vrf {self.vrfs[rd_number][VRFKey.NAME]}",
+                    "address-family ipv4 unicast",
+                    "exit",
+                    "exit"
+                ]
+            else:
+                self.__vrf_commands[rd_number] = [
+                    f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
+                    "address-family ipv4 unicast",
+                    "exit",
+                    "exit"
+                ]
+
+        if self.ios_xr:
+            command = f"no export route-target {self.as_number}:{rt_to_be_removed}"
+        else:
+            command = f"no route-target export {self.as_number}:{rt_to_be_removed}"
+
+        self.__vrf_commands[rd_number].insert(-3, command)
+
+        if self.ibgp_adjacent_router_ids:   # If BGP is configured in the router
+            # Reset the VRF configuration
+            self.no_vrf_redistribution(self.vrfs[rd_number][VRFKey.NAME])
+            self.bgp_routing_config(redistribution=True)
 
     def remove_vrf(self, rd_number: int) -> None:
         removed_vrf = self.vrfs.pop(rd_number)
@@ -472,18 +496,17 @@ class Router(NetworkDevice):
         execute_function()
 
     def no_vrf_redistribution(self, vrf_name: str) -> None:
-        if self.ios_xr:
+        if not self._starter_commands["reset_bgp"]:
             self._starter_commands["reset_bgp"] = [
                 f"router bgp {self.as_number}",
-                f"no vrf {vrf_name}",
                 "exit"
             ]
+
         else:
-            self._starter_commands["reset_bgp"] = [
-                f"router bgp {self.as_number}",
-                f"no address-family ipv4 vrf {vrf_name}",
-                "exit"
-            ]
+            if self.ios_xr:
+                self._starter_commands["reset_bgp"].insert(-1, f"no vrf {vrf_name}")
+            else:
+                self._starter_commands["reset_bgp"].insert(-1, f"no address-family ipv4 vrf {vrf_name}")
 
     def __generate_mpls_command(self) -> None:
         if self.__any_mpls_interfaces():
