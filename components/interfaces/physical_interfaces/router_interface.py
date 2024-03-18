@@ -28,7 +28,7 @@ class RouterInterface(PhysicalInterface):
 
         # VPN Attributes
         self.mpls_enabled: bool = False
-        self.vrf_name: str = ""
+        self.vrf_name: str = None
         self.static_routing: bool = False
 
         self._cisco_commands.update({

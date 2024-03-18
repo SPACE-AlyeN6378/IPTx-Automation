@@ -125,7 +125,7 @@ class PhysicalInterface(Interface):
         # Release the interface
         self.release()
 
-        # Reduce the bandwidth
+        # Reduce the bandwidth, if necessary
         remote_int_bandwidth = self.remote_device.interface(remote_port).bandwidth  # Bandwidth on the remote device
 
         if remote_int_bandwidth < self.bandwidth:   # If the bandwidth at the remote port is lower
@@ -169,10 +169,15 @@ class PhysicalInterface(Interface):
                 and self.port == other.port \
                 and self.ip_address == other.ip_address \
                 and self.subnet_mask == other.subnet_mask \
-                and self.bandwidth == other.bandwidth \
+                and self.device_id == other.device_id \
                 and self.mtu == other.mtu \
                 and self.duplex == other.duplex \
                 and self.remote_device == other.remote_device
 
         return False
 
+    def __hash__(self) -> int:
+        return hash((self.int_type, self.port,
+                     self.ip_address, self.subnet_mask,
+                     self.device_id, self.mtu, self.duplex,
+                     self.remote_device))

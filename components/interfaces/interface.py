@@ -6,6 +6,7 @@ from typing import Union, Tuple, List, Iterable
 
 from iptx_utils import print_log
 
+
 class Interface:
     # Interface types with its associated default bandwidths
     DEFAULT_TYPES = ("ATM", "Ethernet", "FastEthernet", "GigabitEthernet", "TenGigabitEthernet",
@@ -21,15 +22,6 @@ class Interface:
             return ip_address, str(subnet_mask)
         else:
             return None, None
-
-    @staticmethod
-    def consistent_spacing_ip(ip_address: str = None) -> str | None:
-        if ip_address is not None:
-            octets = list(map(int, ip_address.split(".")))
-            octets = [f"{octet:3d}" for octet in octets]
-            return '.'.join(octets)
-
-        return '               '
 
     # To make sure that the port is of the format x or x/x/x/... (x is a number) ===================
     @staticmethod
@@ -66,11 +58,12 @@ class Interface:
         self.port = port
         self.ip_address, self.subnet_mask = self.get_ip_and_subnet(cidr)
         self.description = ""
+        self.device_id = None
         Interface.validate_port(self.int_type, self.port)  # Check if the port number is of the valid format
 
         # Cisco IOS commands
         self._cisco_commands = {
-            "vrf": [],  # Will be used in routers and switches, not here
+            "vrf": [],  # Will be used in routers and switches, not here (just to maintain the sequence)
             "ip address": [],
             "description": []
         }
@@ -79,22 +72,27 @@ class Interface:
             self._cisco_commands["ip address"].append(f"ip address {self.ip_address} {self.subnet_mask}")
 
     # Stringify
-    def __str__(self):
+    def __str__(self) -> str:
         if self.int_type in ("Tunnel", "VLAN"):
             return f"{self.int_type} {self.port}"
         else:
             return f"{self.int_type}{self.port}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
     # Equality (for identification)
     def __eq__(self, other):
         if isinstance(other, Interface):
-            return self.int_type == other.int_type and self.port == other.port \
-                and self.ip_address == other.ip_address and self.subnet_mask == other.subnet_mask
+            return (self.int_type == other.int_type and self.port == other.port
+                    and self.ip_address == other.ip_address
+                    and self.subnet_mask == other.subnet_mask
+                    and self.device_id == other.device_id)
 
         return False
+
+    def __hash__(self) -> int:
+        return hash((self.int_type, self.port, self.ip_address, self.subnet_mask, self.device_id))
 
     def __contains__(self, item):
         return self.int_type == item.int_type and self.port == item.port \
@@ -138,11 +136,9 @@ class Interface:
         command_block = [f"interface {str(self)}"]
 
         for attr in self._cisco_commands.keys():
-            # Check if each line of the command exists
-            if self._cisco_commands[attr]:
-                # Add to command_block and clear the string
-                command_block.extend(self._cisco_commands[attr])
-                self._cisco_commands[attr].clear()
+            # Add to command_block and clear the string
+            command_block.extend(self._cisco_commands[attr])
+            self._cisco_commands[attr].clear()
 
         # If the generated command exists, return the full list of commands, otherwise return an empty list
         if len(command_block) > 1:
