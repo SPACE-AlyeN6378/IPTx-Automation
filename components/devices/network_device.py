@@ -60,7 +60,7 @@ class NetworkDevice:
                 else:
                     indent_size += 1
 
-            if command_line[:8] == "neighbor":
+            if command_line[:8] == "neighbor" and not command_line[:14] == "neighbor-group":
                 if not any(substr in command_line for substr in ["remote-as",
                                                                  "update-source",
                                                                  "route-reflector",
@@ -86,6 +86,7 @@ class NetworkDevice:
         self.__phys_interfaces: List[PhysicalInterface] = []
         self.__loopbacks: List[Loopback] = []
         self.add_interface(*interfaces)
+        self.node_color = "gray"
 
         # Cisco commands
         self._starter_commands: CommandsDict = {
@@ -182,7 +183,6 @@ class NetworkDevice:
         # Update the dictionary of cisco commands
         self._starter_commands["hostname"] = [f"hostname {self.hostname}"]
 
-    # Adds the interfaces
     def add_interface(self, *new_interfaces: PhysicalInterface | Loopback) -> None:
         # Check if all the interfaces are either a physical interface or a loopback
         if not all(isinstance(interface, (PhysicalInterface, Loopback)) for interface in new_interfaces):
@@ -190,6 +190,8 @@ class NetworkDevice:
 
         # Loop through each new interfaces
         for interface in new_interfaces:
+            interface.device_id = self.__device_id
+
             # Cannot contain duplicate ports
             if isinstance(interface, PhysicalInterface):
                 ports = [inf.port for inf in self.__phys_interfaces]
