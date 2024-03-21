@@ -121,6 +121,22 @@ def print_warning(text: str):
         exit()
 
 
+def print_denied(text: str):
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    color = Fore.MAGENTA + Style.BRIGHT
+
+    print(f"{color}{formatted_datetime} | DENIED: {text}{Style.RESET_ALL}")
+
+
+def print_error(text: str):
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    color = Fore.RED
+
+    print(f"{color}{formatted_datetime} | ERROR! {text}{Style.RESET_ALL}")
+
+
 def print_success(text: str):
     current_datetime = datetime.datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
