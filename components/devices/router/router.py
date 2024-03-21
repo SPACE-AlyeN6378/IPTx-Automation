@@ -6,27 +6,24 @@ from components.interfaces.loopback.loopback import Loopback
 from typing import Iterable, Dict, List, Set
 from enum import Enum
 
-from iptx_utils import print_warning, print_log, DeviceError, NetworkError
+from iptx_utils import print_warning, print_log, print_denied, DeviceError, NetworkError
 
 
 class VRFKey(Enum):
     NAME = 'name',
-    IMPORT = 'import'
+    IMPORT = 'import',
+    INTERFACES = 'interfaces'
 
 
 class Router(NetworkDevice):
 
     def __init__(self, router_id: str, hostname: str = "Router",
-                 interfaces: Iterable[RouterInterface | Loopback] = None, ios_xr: bool = False) -> None:
+                 interfaces: Iterable[RouterInterface | Loopback] = None) -> None:
 
-        self.mpls_enabled: bool = True
         self.OSPF_PROCESS_ID: int = 65000
-        # self.OSPF_MPLS_PROCESS_ID: int = 2500
-
-        self.ios_xr: bool = ios_xr
         self.priority: int = 20  # Priority on a scale of 1 to 100
 
-        # BGP properties
+        # BGP properties and attributes
         self.as_number: int = 0
         self.route_reflector: bool = False
         self.ibgp_adjacent_router_ids: set[str] = set()
@@ -39,12 +36,14 @@ class Router(NetworkDevice):
         self.reference_bw = self.get_max_bandwidth() // 1000
 
         # VRF
-        self.provider_edge = True
-        self.vrfs: dict[int, dict[VRFKey, str | set[int]]] = dict()
+        self.vrfs: dict[int, dict[VRFKey, str | set[int | RouterInterface]]] = dict()
 
-        self.__vrf_commands: dict[int, list[str]] = dict()
+        # MPLS
+        self.__mpls_configured: bool = False
+
+        self._vrf_commands: dict[int, list[str]] = dict()
         self._starter_commands.update({
-            "reset_bgp": [],
+            "vrf_af_disable": [],
             "vrf": []
         })
 
@@ -55,22 +54,16 @@ class Router(NetworkDevice):
             "mpls": []
         }
 
-        self.__bgp_commands: dict[str, list[str]] = {
+        self._bgp_commands: dict[str, list[str]] = {
             "start": [],
             "id": [],
-            "address_families": [],
-            "ipv4_unicast": [],
-            "vpn_v4": [],
-            "neighbor_group": [],
             "neighbor": [],
-            "ebgp": []
+            "af_vpn_v4": [],
+            "external": []
         }
 
     def __str__(self):
         name = super().__str__().replace("Device", "Router")
-        if self.ios_xr:
-            name = "XR " + name
-
         return name
 
     def __any_mpls_interfaces(self) -> bool:
@@ -93,10 +86,6 @@ class Router(NetworkDevice):
         if not all(isinstance(interface, (RouterInterface, Loopback)) for interface in new_interfaces):
             raise TypeError("All interfaces should either be a RouterInterface or a Loopback")
 
-        if self.ios_xr:
-            for interface in new_interfaces:
-                interface.xr_mode = True
-
         super().add_interface(*new_interfaces)
 
     def get_ints_by_ospf_area(self, area_number):
@@ -116,111 +105,83 @@ class Router(NetworkDevice):
                 interface.ospf_area = area_number
 
     def add_vrf(self, rd_number: int, name: str) -> None:
-        if not self.provider_edge:
+        if not self.is_provider_edge:
             raise DeviceError("This is not a provider edge router, so VRF cannot be configured in this device")
 
         if self.as_number == 0:
             raise ValueError("The AS number for this router hasn't been assigned yet.")
 
-        self.vrfs[rd_number] = {VRFKey.NAME: name, VRFKey.IMPORT: set()}
+        if rd_number in self.vrfs:
+            raise ValueError(f"VRF with name RD {rd_number} already exists")
 
-        if self.ios_xr:
-            self.__vrf_commands[rd_number] = [
-                f"vrf {name}",
-                "address-family ipv4 unicast",
-                f"export route-target {self.as_number}:{rd_number}",
-                "exit",
-                "exit"
-            ]
-        else:
-            self.__vrf_commands[rd_number] = [
-                f"vrf definition {name}",
-                f"rd {self.as_number}:{rd_number}",
-                "address-family ipv4 unicast",
-                f"route-target export {self.as_number}:{rd_number}",
-                "exit",
-                "exit",
-            ]
+        self.vrfs[rd_number] = {VRFKey.NAME: name, VRFKey.IMPORT: set(), VRFKey.INTERFACES: set()}
+        self._vrf_commands[rd_number] = [
+            f"vrf definition {name}",
+            f"rd {self.as_number}:{rd_number}",
+            "address-family ipv4",
+            f"route-target export {self.as_number}:{rd_number}",
+            "exit",
+            "exit",
+        ]
 
     def add_route_targets(self, rd_number: int, new_rts: Iterable[int]) -> None:
         self.vrfs[rd_number][VRFKey.IMPORT] |= set(new_rts)
 
-        if not self.__vrf_commands[rd_number]:
-            if self.ios_xr:
-                self.__vrf_commands[rd_number] = [
-                    f"vrf {self.vrfs[rd_number][VRFKey.NAME]}",
-                    "address-family ipv4 unicast",
-                    "exit",
-                    "exit"
-                ]
-            else:
-                self.__vrf_commands[rd_number] = [
-                    f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
-                    "address-family ipv4 unicast",
-                    "exit",
-                    "exit"
-                ]
+        if not self._vrf_commands[rd_number]:
+            self._vrf_commands[rd_number] = [
+                f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
+                "address-family ipv4",
+                "exit",
+                "exit"
+            ]
 
         for rt in new_rts:
-            if self.ios_xr:
-                command = f"export route-target {self.as_number}:{rt}"
-            else:
-                command = f"route-target export {self.as_number}:{rt}"
-
-            self.__vrf_commands[rd_number].insert(-3, command)
+            self._vrf_commands[rd_number].insert(-2, f"route-target import {self.as_number}:{rt}")
 
     def del_route_target(self, rd_number: int, rt_to_be_removed: int) -> None:
         self.vrfs[rd_number][VRFKey.IMPORT].discard(rt_to_be_removed)
 
-        if not self.__vrf_commands[rd_number]:
-            if self.ios_xr:
-                self.__vrf_commands[rd_number] = [
-                    f"vrf {self.vrfs[rd_number][VRFKey.NAME]}",
-                    "address-family ipv4 unicast",
-                    "exit",
-                    "exit"
-                ]
-            else:
-                self.__vrf_commands[rd_number] = [
-                    f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
-                    "address-family ipv4 unicast",
-                    "exit",
-                    "exit"
-                ]
+        if not self._vrf_commands[rd_number]:
+            self._vrf_commands[rd_number] = [
+                f"vrf definition {self.vrfs[rd_number][VRFKey.NAME]}",
+                "address-family ipv4",
+                "exit",
+                "exit"
+            ]
 
-        if self.ios_xr:
-            command = f"no export route-target {self.as_number}:{rt_to_be_removed}"
-        else:
-            command = f"no route-target export {self.as_number}:{rt_to_be_removed}"
-
-        self.__vrf_commands[rd_number].insert(-3, command)
+        self._vrf_commands[rd_number].insert(-2, f"no route-target import {self.as_number}:{rt_to_be_removed}")
 
         if self.ibgp_adjacent_router_ids:   # If BGP is configured in the router
             # Reset the VRF configuration
-            self.no_vrf_redistribution(self.vrfs[rd_number][VRFKey.NAME])
-            self.bgp_routing_config(redistribution=True)
+            self.disable_vrf_redistribution(self.vrfs[rd_number][VRFKey.NAME])
+            self.bgp_routing(redistribution=True)
+
+    def assign_int_to_vrf(self, rd_number: int, designated_port: str) -> None:
+        self.interface(designated_port) \
+         .assign_vrf(self.vrfs[rd_number][VRFKey.NAME])
+
+        self.vrfs[rd_number][VRFKey.INTERFACES].add(self.interface(designated_port))
 
     def remove_vrf(self, rd_number: int) -> None:
+        # Reconfigure IP Addresses for each interface
+        for interface in self.vrfs[rd_number][VRFKey.INTERFACES]:
+            interface.remove_vrf()
+
+        # Remove the VRF
         removed_vrf = self.vrfs.pop(rd_number)
 
-        if self.ios_xr:
-            self.__vrf_commands[rd_number] = [f"no vrf {removed_vrf[VRFKey.NAME]}"]
-        else:
-            self.__vrf_commands[rd_number] = [f"no vrf definition {removed_vrf[VRFKey.NAME]}"]
+        # Generate the command
+        self._vrf_commands[rd_number] = [f"no vrf definition {removed_vrf[VRFKey.NAME]}"]
 
-    def __consolidate_vrf_commands(self) -> None:
-        for commands in self.__vrf_commands.values():
-            self._starter_commands["vrf"].extend(commands)
-            commands.clear()
+    def set_as_route_reflector(self) -> None:
+        self.route_reflector = True
+        self.set_hostname(self.hostname + "-RR")
 
-    def config_routing_policy(self) -> None:
-        self.__routing_commands["route-policy"].extend([
-            "route-policy PASS",
-            "pass",
-            "end-policy"
-        ])
+    def not_route_reflector(self) -> None:
+        self.route_reflector = False
+        self.set_hostname(self.hostname.replace("-RR", ""))
 
-    def begin_igp_routing(self):
+    def begin_internal_routing(self) -> None:
         # Configure OSPF for all interfaces
         for interface in self.all_phys_interfaces():
             # The interface should be connected to another router, and within autonomous system
@@ -234,62 +195,28 @@ class Router(NetworkDevice):
         # Generate Cisco command for initialization of router OSPF configuration
         self.__routing_commands["ospf"] = [
             f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
-            f"router-id {self.id()}",  # Router ID
+            f"router-id {self.id()}", # Router ID
             f"auto-cost reference-bandwidth {self.reference_bw}",  # Cost is autoconfigured using reference BW
         ]
 
-        # Generate Cisco command
-        # For IOS XR
-        if self.ios_xr:
-            # Iterate through each area number
-            for area_number in self.get_all_areas():
-                # Iterate through each area number
-                self.__routing_commands["ospf"].append(f"area {area_number}")
+        # All the EGP interfaces and loopbacks are configured as passive, in the OSPF section
+        for interface in self.all_interfaces():
+            if not interface.ospf_allow_hellos:
+                self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
 
-                for interface in self.get_ints_by_ospf_area(area_number):
-                    # If the physical interface is connected or is just a loopback
-                    if interface.int_type == "Loopback":
-                        self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
-                    elif interface.remote_device is not None and not interface.egp:
-                        self.__routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
-
-                self.__routing_commands["ospf"].append("exit")
-
-        else:  # For IOS routers
-            # All the EGP interfaces and loopbacks are configured as passive, in the OSPF section
-            for interface in self.all_interfaces():
-                if not interface.ospf_allow_hellos:
-                    self.__routing_commands["ospf"].append(f"passive-interface {str(interface)}")
+        if self.__any_mpls_interfaces():
+            self.__routing_commands["ospf"].append("mpls ldp sync")
 
         self.__routing_commands["ospf"].append("exit")
-
-    def __consolidate_bgp_commands(self) -> None:
-
-        if any(cmd_list for cmd_list in self.__bgp_commands.values()):
-            if self.ios_xr:
-                keys = ["start", "id", "address_families", "neighbor_group", "ipv4_unicast",
-                        "vpn_v4", "neighbor", "ebgp"]
-
-                self.__bgp_commands["vpn_v4"].append("exit")  # To exit out of the neighbor-group command
-
-            else:
-                keys = ["start", "id", "neighbor", "vpn_v4", "ebgp"]
-
-            for key in keys:
-                if self.__bgp_commands[key]:
-                    self.__routing_commands["bgp"].extend(self.__bgp_commands[key])
-                    self.__bgp_commands[key].clear()
-
-            self.__routing_commands["bgp"].append("exit")
 
     def is_provider_edge(self) -> bool:
         return any(interface.egp for interface in self.all_phys_interfaces())
 
-    def bgp_routing_config(self, initialization: bool = False, new_neighbor_ids: list[str] = None,
-                           redistribution: bool = False) -> None:
+    def bgp_routing(self, initialization: bool = False, ibgp_neighbor_ids: Iterable[str] = None,
+                    redistribution: bool = False) -> None:
 
-        if new_neighbor_ids is None:
-            new_neighbor_ids = []
+        if ibgp_neighbor_ids is None:
+            ibgp_neighbor_ids = []
 
         # Step 1: Error/warning check
         def error_check():
@@ -300,6 +227,9 @@ class Router(NetworkDevice):
                 raise NetworkError("This router is neither a route-reflector, "
                                    "nor a provider edge, so it's not for BGP routing")
 
+            if not (initialization or ibgp_neighbor_ids or redistribution):
+                raise TypeError("What should I configure?")
+
             if (not self.__any_mpls_interfaces()) and self.vrfs:
                 print_warning(
                     "VRF is configured without any MPLS capabilities. MPLS is required for the VPN connection "
@@ -307,115 +237,47 @@ class Router(NetworkDevice):
 
         # Step 2: Starting with the AS number and the ID
         def open_config():
-            self.__bgp_commands["start"] = [f"router bgp {self.as_number}"]
+            self._bgp_commands["start"] = [f"router bgp {self.as_number}"]
 
         def define_router_id():
-            self.__bgp_commands["id"] = [
+            self._bgp_commands["id"] = [
                 f"bgp router-id {self.id()}",
             ]
 
             if self.route_reflector:
-                self.__bgp_commands["id"].append(f"bgp cluster-id {self.id()}")
+                self._bgp_commands["id"].append(f"bgp cluster-id {self.id()}")
 
         # Step 3: Initialize address families
         def address_families():
-            if self.ios_xr:
-                # IPv4 Unicast
-                self.__bgp_commands["address_families"] = [
-                    "address-family ipv4 unicast",
-                    "exit"
-                ]
+            if self.__any_mpls_interfaces():
+                self._bgp_commands["af_vpn_v4"] = ["address-family vpnv4", "exit-address-family"]
 
-                if self.__any_mpls_interfaces():
-                    # VPNv4 Unicast
-                    self.__bgp_commands["address_families"].extend([
-                        "address-family vpnv4 unicast",
-                        "exit"
-                    ])
-
-                    # Goes inside the neighbor-group configuration
-                    self.__bgp_commands["ipv4_unicast"] = ["address-family ipv4 labeled-unicast"]
-                    self.__bgp_commands["vpn_v4"] = ["address-family vpnv4 unicast"]
-
-                else:
-                    self.__bgp_commands["ipv4_unicast"] = ["address-family ipv4 unicast"]
-
-            else:
-                if self.__any_mpls_interfaces():
-                    self.__bgp_commands["vpn_v4"] = ["address-family vpnv4"]
-
-                    for rtr_id in new_neighbor_ids:
-                        self.__bgp_commands["vpn_v4"].extend([
-                            f"neighbor {rtr_id} activate",
-                            f"neighbor {rtr_id} send-community both"
-                        ])
-
-                        self.__bgp_commands["vpn_v4"].append(f"neighbor {rtr_id} route-reflector-client")
-                    self.__bgp_commands["vpn_v4"].append("exit-address-family")
-
-        # Step 4: Configure neighbor-group
-        def xr_neighbor_group():
-            if self.ios_xr:
-                neighbor_group_name = "UNTITLED"
-                neighbor_config_cmd = "!"
-
-                # Route-reflector or provider edge?
-                if self.route_reflector:
-                    neighbor_group_name = "RR_TO_CLIENT"
-                    neighbor_config_cmd = "route-reflector-client"
-
-                elif self.is_provider_edge():
-                    neighbor_group_name = "CLIENT_TO_RR"
-                    neighbor_config_cmd = "soft-reconfiguration inbound always"
-
-                # Introduce neighbor-group
-                self.__bgp_commands["neighbor_group"] = [
-                    f"neighbor-group {neighbor_group_name}",
-                    f"remote-as {self.as_number}",
-                    f"update-source {self.loopback(0)}"
-                ]
-
-                # Insert the commands
-                self.__bgp_commands["ipv4_unicast"].extend([neighbor_config_cmd, "exit"])
-                if self.__any_mpls_interfaces():
-                    self.__bgp_commands["vpn_v4"].extend([neighbor_config_cmd, "exit"])
-
-                return neighbor_group_name
-
-            else:
-                return None
-
-        # Step 5: Assign neighbors
-        def assign_neighbors():
+        # Step 4: Assign neighbors
+        def assign_ibgp_neighbors():
             # Assign neighbor group to each adjacent routers to establish neighbor
-            neighbor_group_name = xr_neighbor_group()
-
-            for rtr_id in new_neighbor_ids:
+            for rtr_id in ibgp_neighbor_ids:
                 self.ibgp_adjacent_router_ids.add(rtr_id)
 
-                if self.ios_xr:
-                    self.__bgp_commands["neighbor"].extend([
-                        f"neighbor {rtr_id}",
-                        f"use neighbor-group {neighbor_group_name}",
-                        "exit"
-                    ])
+                self._bgp_commands["neighbor"].extend([
+                    f"neighbor {rtr_id} remote-as {self.as_number}",
+                    f"neighbor {rtr_id} update-source {self.loopback(0)}",
+                ])
 
-                else:
-                    self.__bgp_commands["neighbor"].extend([
-                        f"neighbor {rtr_id} remote-as {self.as_number}",
-                        f"neighbor {rtr_id} update-source {self.loopback(0)}",
-                    ])
+                self._bgp_commands["af_vpn_v4"][-1:-1] = [
+                    f"neighbor {rtr_id} activate",
+                    f"neighbor {rtr_id} send-community both"
+                ]
 
-                    if self.route_reflector:
-                        self.__bgp_commands["neighbor"].append(f"neighbor {rtr_id} route-reflector-client")
+                if self.route_reflector:
+                    self._bgp_commands["neighbor"].append(f"neighbor {rtr_id} route-reflector-client")
+                    self._bgp_commands["af_vpn_v4"].insert(-1, f"neighbor {rtr_id} route-reflector-client")
 
         # Step 6: EBGP Redistribution
-        def redistribution_to_egp():
-
+        def redistribution_to_external_routes():
             vrfs = [(rd, vrf_[VRFKey.NAME]) for rd, vrf_ in self.vrfs.items()]
 
             # Helper Functions
-            def establish_ebgp_neighbors():
+            def establish_ebgp_neighbors(vrf_name=None):
                 for interface in filter(lambda i: i.vrf_name == vrf_name and not i.static_routing,
                                         self.all_phys_interfaces()):
 
@@ -425,61 +287,28 @@ class Router(NetworkDevice):
                     remote_as = interface.remote_device.as_number
                     interface_ip = interface.remote_device.interface(interface.remote_port).ip_address
 
-                    self.config_routing_policy()  # To allow all the prefixes in
-
-                    if self.ios_xr:
-                        self.__bgp_commands["ebgp"].extend([
-                            f"neighbor {interface_ip}",
-                            f"remote-as {remote_as}",
-                            "address-family ipv4 unicast",
-                            "route-policy PASS in",
-                            "route-policy PASS out",
-                            "soft-reconfiguration inbound always"
-                        ])
-
-                    else:
-                        self.__bgp_commands["ebgp"].extend([
-                            f"neighbor {interface_ip} remote-as {remote_as}",
-                            f"neighbor {interface_ip} activate"
-                        ])
-
-            def redistribute_in_vrf(name, rd):
-                if self.ios_xr:
-                    self.__bgp_commands["ebgp"] = [
-                        f"vrf {name}",
-                        f"rd {self.as_number}:{rd}",
-                        "address-family ipv4 unicast",
-                        "label mode per-vrf",
-                        "redistribute connected",
-                        "exit"
-                    ]
-                else:
-                    self.__bgp_commands["ebgp"] = [
-                        f"address-family ipv4 vrf {vrf_name}",
-                        "redistribute connected"
-                    ]
+                    self._bgp_commands["external"].append(f"neighbor {interface_ip} remote-as {remote_as}")
+                    if vrf_name is not None:
+                        self._bgp_commands["external"].append(f"neighbor {interface_ip} activate")
 
             # Iterate through each VRF
-            for rd, vrf_name in vrfs:
+            for rd, name in vrfs:
 
                 # Open the VRF configuration section and redistribute the IGP
-                redistribute_in_vrf(vrf_name, rd)
+                self._bgp_commands["external"] = [
+                    f"address-family ipv4 vrf {name}",
+                    "redistribute connected"
+                ]
 
                 # Establish neighborhood adjacency for each remote interfaces
-                establish_ebgp_neighbors()
-
-                if self.ios_xr:
-                    self.__bgp_commands["ebgp"].append("exit")
-                else:
-                    self.__bgp_commands["ebgp"].append("exit-address-family")
+                establish_ebgp_neighbors(name)
+                
+                # Exit out
+                self._bgp_commands["external"].append("exit-address-family")
 
             # No VRFs configured?
             if not vrfs:
-                if self.ios_xr:
-                    self.__bgp_commands["address_families"].insert(1, "redistribute connected")
-                else:
-                    self.__bgp_commands["ebgp"].append("redistribute connected")
-
+                self._bgp_commands["external"].append("redistribute connected")
                 establish_ebgp_neighbors()
 
         def execute_function():
@@ -488,64 +317,67 @@ class Router(NetworkDevice):
             if initialization:
                 define_router_id()
                 address_families()
-            if new_neighbor_ids:
-                assign_neighbors()
+            if ibgp_neighbor_ids:
+                assign_ibgp_neighbors()
             if redistribution:
-                redistribution_to_egp()
+                redistribution_to_external_routes()
 
         execute_function()
 
-    def no_vrf_redistribution(self, vrf_name: str) -> None:
-        if not self._starter_commands["reset_bgp"]:
-            self._starter_commands["reset_bgp"] = [
+    def bgp_reset(self):
+        if self.ibgp_adjacent_router_ids:
+            self.bgp_routing(initialization=True, ibgp_neighbor_ids=self.ibgp_adjacent_router_ids)
+            self._bgp_commands["start"].insert(0, f"no router bgp {self.as_number}")
+
+        else:
+            print_denied("The BGP routing is not yet initialized")
+
+    def disable_vrf_redistribution(self, vrf_name: str) -> None:
+        """
+        Disables the VRF destribution, only used when changing/updating the route targets
+        :param vrf_name: 
+        :return: 
+        """
+        if not self._starter_commands["vrf_af_disable"]:
+            self._starter_commands["vrf_af_disable"] = [
                 f"router bgp {self.as_number}",
                 "exit"
             ]
 
         else:
-            if self.ios_xr:
-                self._starter_commands["reset_bgp"].insert(-1, f"no vrf {vrf_name}")
-            else:
-                self._starter_commands["reset_bgp"].insert(-1, f"no address-family ipv4 vrf {vrf_name}")
+            self._starter_commands["vrf_af_disable"].insert(-1, f"no address-family ipv4 vrf {vrf_name}")
 
-    def __generate_mpls_command(self) -> None:
-        if self.__any_mpls_interfaces():
-            if self.ios_xr:
-                self.__routing_commands["mpls"] = [
-                    "mpls ldp",
-                    f"router-id {self.id()}"
-                ]
+    def __mpls_ldp_activate(self) -> None:
+        """
+        If MPLS is enabled in any interfaces, enable LDP synchronization
+        :return:
+        """
+        if self.__any_mpls_interfaces() and not self.__mpls_configured:
+            self.__routing_commands["mpls"] = [
+                "mpls ldp router-id Loopback0",
+                "mpls label protocol ldp"
+            ]
 
-                for interface in self.all_phys_interfaces():
-                    if interface.mpls_enabled:
-                        self.__routing_commands["mpls"].append(f"interface {str(interface)}")
-                        self.__routing_commands["mpls"].append("exit")
+            self.__mpls_configured = True
 
-                self.__routing_commands["mpls"].append("exit")
-
-            else:
-                # If MPLS is enabled in any interfaces, enable LDP synchronization
-                if self.__any_mpls_interfaces():
-                    self.__routing_commands["ospf"].insert(1, "mpls ldp sync")
-                    self.__routing_commands["mpls"] = [
-                        "mpls ldp router-id loopback0",
-                        "mpls label protocol ldp"
-                    ]
-
-    def send_script(self, print_to_console: bool = True) -> None:
+    def send_script(self, print_to_console: bool = True) -> List[str]:
         print_log("Building configuration...")
 
         # Start with 'configure terminal'
         script = ["configure terminal"]
 
         # # Generate a script for any MPLS routing
-        # self.__generate_mpls_command()
+        self.__mpls_ldp_activate()
 
         # Transfer all the VRF commands to a single list
-        self.__consolidate_vrf_commands()
+        for commands in self._vrf_commands.values():
+            self._starter_commands["vrf"].extend(commands)
+            commands.clear()
 
         # Transfer all the BGP commands to a single list
-        self.__consolidate_bgp_commands()
+        for commands in self._bgp_commands.values():
+            self.__routing_commands["bgp"].extend(commands)
+            commands.clear()
 
         # Iterate through each cisco command by key
         for attr in self._starter_commands.keys():
@@ -563,10 +395,9 @@ class Router(NetworkDevice):
             script.extend(self.__routing_commands[attr])
             self.__routing_commands[attr].clear()
 
-        if self.ios_xr:
-            script.append("commit")
-
         script.append("end")
 
         if print_to_console:
             NetworkDevice.print_script(script, Fore.YELLOW)
+
+        return script

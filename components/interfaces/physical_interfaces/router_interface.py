@@ -2,7 +2,7 @@ from components.interfaces.physical_interfaces.physical_interface import Physica
 from typing import List, TYPE_CHECKING, Dict
 from components.devices.switch.switch import Switch
 from colorama import Fore, Style
-from iptx_utils import NetworkError
+from iptx_utils import NetworkError, print_denied
 import ipaddress
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class RouterInterface(PhysicalInterface):
 
         # VPN Attributes
         self.mpls_enabled: bool = False
-        self.vrf_name: str = None
+        self.vrf_name: str | None = None
         self.static_routing: bool = False
 
         self._cisco_commands.update({
@@ -58,32 +58,31 @@ class RouterInterface(PhysicalInterface):
         return str(ip1)+'/30', str(ip2)+'/30'
 
     def assign_vrf(self, vrf_name: str) -> None:
-        self.vrf_name = vrf_name
-        if not self.egp:
-            self.egp = True
+        if self.vrf_name is not None:
+            raise NetworkError(f"This interface already has a VRF assigned, which is {self.vrf_name}")
 
-        # Command to add VRF
+        self.vrf_name = vrf_name
+
+        # Command to add VRF and reconfigure IP Address
         if self.xr_mode:
             self._cisco_commands["vrf"] = ["vrf " + vrf_name]
-            self._cisco_commands["ip_address"] = f"ipv4 address {self.ip_address} {self.subnet_mask}"
         else:
             self._cisco_commands["vrf"] = ["vrf forwarding " + vrf_name]
-            self._cisco_commands["ip_address"] = f"ip address {self.ip_address} {self.subnet_mask}"
+
+        if self.ip_address:
+            self.config(cidr=f"{self.ip_address}/{self.subnet_mask}")
 
     def remove_vrf(self):
-        self.vrf_name = None
-
-        # Command to remove VRF
-        if self._cisco_commands["vrf"]:  # If the command hasn't been sent yet
-            self._cisco_commands["vrf"].clear()
-
+        # Command to add VRF and reconfigure IP Address
+        if self.xr_mode:
+            self._cisco_commands["vrf"] = ["no vrf " + self.vrf_name]
         else:
-            if self.xr_mode:
-                self._cisco_commands["vrf"] = [f"no vrf {self.vrf_name}"]
-                self._cisco_commands["ip_address"] = f"ipv4 address {self.ip_address} {self.subnet_mask}"
-            else:
-                self._cisco_commands["vrf"] = [f"no vrf forwarding {self.vrf_name}"]
-                self._cisco_commands["ip_address"] = f"ip address {self.ip_address} {self.subnet_mask}"
+            self._cisco_commands["vrf"] = ["no vrf forwarding " + self.vrf_name]
+
+        if self.ip_address:
+            self.config(cidr=f"{self.ip_address}/{self.subnet_mask}")
+
+        self.vrf_name = None
 
     def ospf_config(self, process_id: int = None, area: int = None, p2p: bool = None) -> None:
 
@@ -115,8 +114,8 @@ class RouterInterface(PhysicalInterface):
                     self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
 
         else:   # In EGP mode
-            print(f"{Fore.MAGENTA}DENIED: This interface is for routing across autonomous systems "
-                  f"or configured as VRF, so OSPF cannot be configured{Style.RESET_ALL}")
+            print_denied("This interface is for routing across autonomous systems "
+                         "or configured as VRF, so OSPF cannot be configured")
 
     def ospf_passive_enable(self):
         self.ospf_allow_hellos = False
@@ -201,6 +200,7 @@ class RouterInterface(PhysicalInterface):
             self._cisco_commands["mpls"] = ["no mpls ip", "no mpls label protocol ldp"]
 
     def generate_command_block(self) -> List[str]:
+        # Modify the commands for any XR routing configuration
         if not self.xr_mode:
             # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
             for attribute in self.__more_ospf_commands.keys():
