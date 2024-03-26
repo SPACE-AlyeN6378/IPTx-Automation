@@ -109,6 +109,9 @@ class NetworkDevice:
     def __hash__(self):
         return hash(self.__device_id)
 
+    def __contains__(self, item):
+        return item in self.__device_id
+
     # Getters ---------------------------------------------------------------
     def id(self):
         return self.__device_id
@@ -164,6 +167,10 @@ class NetworkDevice:
                 f"{Fore.YELLOW}WARNING: Unconnected '{self.interface(port)}', so no remote device{Style.RESET_ALL}")
 
         return port_
+
+    def print_ports(self) -> None:
+        for interface in self.all_phys_interfaces():
+            print(interface.port)
 
     # -----------------------------------------------------------------------
 
