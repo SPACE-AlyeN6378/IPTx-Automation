@@ -30,6 +30,7 @@ class PhysicalInterface(Interface):
         self.bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
         self.mtu = 1500
         self.duplex = "auto"
+        self.egp = False
 
         # Used when a connection is established, otherwise
         self.remote_device = None
