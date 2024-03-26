@@ -111,14 +111,15 @@ def print_log(text: str, color_number: int = 2):
     print(f"{color}{formatted_datetime} | {text}{Style.RESET_ALL}")
 
 
-def print_warning(text: str):
+def print_warning(text: str, prompt: bool = True):
     current_datetime = datetime.datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
     print(f"{Fore.MAGENTA}{formatted_datetime} | WARNING! {text}")
 
-    if input(f"Do you want to continue? (Y/?): {Style.RESET_ALL}").upper() != 'Y':
-        exit()
+    if prompt:
+        if input(f"Do you want to continue? (Y/?): {Style.RESET_ALL}").upper() != 'Y':
+            exit()
 
 
 def print_denied(text: str):
