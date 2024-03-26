@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 from ipaddress import IPv4Address
-from typing import Union, Tuple, List, Iterable
+from typing import Union, Tuple, Iterable
 
 from iptx_utils import print_log
 
