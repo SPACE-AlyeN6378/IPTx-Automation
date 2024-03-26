@@ -41,6 +41,13 @@ class Loopback(Interface):
                 f"ip ospf {process_id} area {self.ospf_area}"
             ]
 
+    def generate_command_block(self):
+        if self.xr_mode:
+            if self._cisco_commands["ip address"]:
+                self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
+
+        return super().generate_command_block()
+
     def generate_ospf_xr_commands(self) -> List[str]:
         if self.__ospf_xr_commands:
             commands = [f"interface {str(self)}"]
@@ -52,13 +59,5 @@ class Loopback(Interface):
         else:
             return []
 
-    # Generate IBGP neighbor establishment command
-    def get_ibgp_command(self, as_num: int) -> List[str]:
-        if not self.ip_address:
-            raise NotImplementedError("The IP address is missing")
 
-        return [
-            f"neighbor {self.ip_address} remote-as {as_num}",
-            f"neighbor {self.ip_address} update-source {str(self)}"
-        ]
 
