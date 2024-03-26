@@ -24,32 +24,8 @@ class Topology:
     def print_log(self, text: str) -> None:
         print_log(f"AS {self.as_number}: {text}")
 
-    # Ensures that a unique key is passed. If the number is not given, the smallest missing number is used instead
-    def __auto_generate_key(self, number: int = None) -> int:
-        keys = [edge[2]["key"] for edge in self._graph.edges(data=True) if "key" in edge[2]]
-        keys.extend(edge[2]["scr"] for edge in self._graph.edges(data=True) if "scr" in edge[2])
-
-        # If the number in the parameter is passed
-        if number is not None:
-            # If the number already exists, raise an error
-            if number in keys:
-                raise IndexError(f"Key ID '{number}' already exists at another link")
-
-            return number
-
-        else:    # The number is not passed in the scenario
-            return smallest_missing_non_negative_integer(keys)
-
     def get_all_devices(self) -> List[Switch | Router]:
         return list(self._graph.nodes())
-
-    def print_links(self) -> None:
-        print()
-        print_log("The following connections have been established:")
-        for edge in self._graph.edges(data=True):
-            print(f"{edge[0]} ({edge[2]['d1_port']}) ---> {edge[1]} ({edge[2]['d2_port']})   Key: {edge[2]['key']:6d}, "
-                  f"Bandwidth: {edge[2]['bandwidth']} KB/s")
-        print()
 
     def get_all_routers(self) -> List[Router]:
         return [node for node in self._graph.nodes() if isinstance(node, Router)]
@@ -76,13 +52,6 @@ class Topology:
     def get_link(self, device_id1: str, device_id2: str) -> Edge:
         return self[device_id1], self[device_id2], self._graph[self[device_id1]][self[device_id2]]
 
-    def get_link_by_key(self, key: int) -> Edge:
-        for edge in self._graph.edges(data=True):
-            if edge[2]['key'] == key:
-                return edge
-
-        raise IndexError(f"ERROR in AS_NUM {self.as_number}: Edge with key '{key}' not found")
-
     def add_switch(self, switch: Switch) -> None:
         if not isinstance(switch, Switch):
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {switch.hostname} is not a switch")
@@ -99,9 +68,11 @@ class Topology:
         self._graph.add_node(switch)
         print_success(f"{str(switch)} added!")
 
-    def add_router(self, router: Router) -> None:
+    def add_router(self, router: Router, is_guest: bool = False) -> None:
 
-        router.as_number = self.as_number
+        if not is_guest:
+            router.as_number = self.as_number
+
         if not isinstance(router, Router):
             raise TypeError(f"ERROR in AS_NUM {self.as_number}: Device {router.hostname} is not a router")
 
@@ -110,7 +81,11 @@ class Topology:
                                f"ID {router.id()}. Please try a different one.")
 
         self._graph.add_node(router)
-        print_success(f"{str(router)} added!")
+
+        if is_guest:
+            print_success(f"{str(router)} added as a client!")
+        else:
+            print_success(f"{str(router)} added!")
 
     def add_devices(self, devices: Iterable[Router | Switch]):
         for device in devices:
@@ -135,18 +110,17 @@ class Topology:
                 break
 
     def connect_devices(self, device_id1: str, port1: str, device_id2: str, port2: str,
-                        key: int = None, cable_bandwidth: int = None) -> None:
-
-        key = self.__auto_generate_key(key)
+                        cable_bandwidth: int = None) -> None:
 
         ethernet_types = list(PhysicalInterface.BANDWIDTHS.keys())[1:5]
 
+        # Should be of the same interface type
         if not (self[device_id1].interface(port1).int_type in ethernet_types
                 and self[device_id2].interface(port2).int_type in ethernet_types):
 
             if self[device_id1].interface(port1).int_type != self[device_id2].interface(port2).int_type:
-                raise ConnectionError(f"ERROR in AS_NUM {self.as_number}: Cannot "
-                                      f"connect {str(self[device_id1].interface(port1))} with "
+                raise ConnectionError(f"Incompatible interface types: Cannot connect "
+                                      f"{str(self[device_id1].interface(port1))} with "
                                       f"{str(self[device_id2].interface(port2))}")
 
         self[device_id1].interface(port1).connect_to(self[device_id2], port2, cable_bandwidth)
@@ -154,9 +128,12 @@ class Topology:
         link_bandwidth = self[device_id1].interface(port1).bandwidth
 
         self._graph.add_edge(self[device_id1], self[device_id2], d1_port=port1, d2_port=port2,
-                             key=key, bandwidth=link_bandwidth)
+                             bandwidth=link_bandwidth)
 
-    def show_plot(self, layout: str = "spring"):
+    def disconnect_devices(self, device_id1: str, device_id2: str):
+        self._graph.remove_edge(self[device_id1], self[device_id2])
+
+    def show_topology_graph(self, layout: str = "spring"):
         if layout.lower() == "spring":
             pos = nx.spring_layout(self._graph)
         elif layout.lower() == "spectral":
@@ -170,7 +147,9 @@ class Topology:
         else:
             raise ValueError(f"Invalid layout type: {layout}")
 
-        nx.draw(self._graph, pos, with_labels=True, font_weight='bold', node_size=1000, node_color='skyblue',
+        node_colors = [node.node_color for node in self._graph.nodes()]
+
+        nx.draw(self._graph, pos, with_labels=True, font_weight='bold', node_color=node_colors, node_size=1000,
                 font_color='black',
                 font_size=10)
 

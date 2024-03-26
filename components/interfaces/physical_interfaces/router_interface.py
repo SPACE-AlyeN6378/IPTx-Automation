@@ -15,7 +15,6 @@ class RouterInterface(PhysicalInterface):
 
         # Permanent data types
         self.xr_mode: bool = False
-        self.egp: bool = False
 
         # OSPF Attributes
         self.ospf_process_id: int = 0
@@ -30,6 +29,9 @@ class RouterInterface(PhysicalInterface):
         self.mpls_enabled: bool = False
         self.vrf_name: str | None = None
         self.static_routing: bool = False
+
+        self.egp: bool = False
+        self.ebgp_neighbor_confirmed: bool = False
 
         self._cisco_commands.update({
             "ospf": [],
