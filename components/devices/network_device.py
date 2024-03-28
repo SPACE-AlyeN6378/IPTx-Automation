@@ -237,9 +237,9 @@ class NetworkDevice:
                     raise NetworkError(f"ERROR: Overlapping networks in '{str(interface)}'")
 
     # Generate a complete configuration script
-    def send_script(self) -> None:
-        # Start with 'configure terminal'
-        script = ["configure terminal"]
+    def generate_script(self) -> List[str]:
+        # Start with an empty list
+        script = []
 
         # Iterate through each cisco command by key
         for attr in self._starter_commands.keys():
@@ -248,13 +248,9 @@ class NetworkDevice:
             script.extend(self._starter_commands[attr])
             self._starter_commands[attr].clear()
 
-        """
-        NOTE: For this configuration, only the hostname configuration is added. There are more lines of code in routers
-        and switches.
-        """
         # Iterate through each interface
         for interface in self.all_interfaces():
             script.extend(interface.generate_command_block())
 
         script.append("end")
-        NetworkDevice.print_script(script, Fore.GREEN)
+        return script

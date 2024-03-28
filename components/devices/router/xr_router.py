@@ -233,11 +233,8 @@ class XRRouter(Router):
 
             self._routing_commands["client-connection"].insert(-2, f"neighbor {remote_int_ip_address} activate")
 
-    def send_script(self, print_to_console: bool = True) -> List[str]:
-        script = super().send_script(print_to_console=False)
-        script.insert(-1, "commit")
-
-        if print_to_console:
-            NetworkDevice.print_script(script, Fore.YELLOW)
+    def generate_script(self) -> List[str]:
+        script = super().generate_script()
+        script.remove("write memory")
 
         return script

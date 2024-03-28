@@ -301,11 +301,11 @@ class Router(NetworkDevice):
             self._routing_commands["client-connection"].insert(-1, f"neighbor {remote_int_ip_address} "
                                                                    f"remote-as {remote_as}")
 
-    def send_script(self, print_to_console: bool = True) -> List[str]:
-        print_log("Building configuration...")
+    def generate_script(self) -> List[str]:
+        print_log(f"Building configuration for {str(self)}...")
 
-        # Start with 'configure terminal'
-        script = ["configure terminal"]
+        # Start with an empty list
+        script = []
 
         # # Generate a script for any MPLS routing
         self.__mpls_ldp_activate()
@@ -334,9 +334,5 @@ class Router(NetworkDevice):
             script.extend(self._routing_commands[attr])
             self._routing_commands[attr].clear()
 
-        script.append("end")
-
-        if print_to_console:
-            NetworkDevice.print_script(script, Fore.YELLOW)
-
+        script.append("write memory")
         return script
