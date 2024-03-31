@@ -10,7 +10,7 @@ from colorama import Style, Fore
 import re
 
 
-# import pyperclip
+import pyperclip
 
 
 class NetworkDevice:
@@ -67,6 +67,10 @@ class NetworkDevice:
                                                                  "activate",
                                                                  "send-community"]):
                     indent_size += 1
+
+    @staticmethod
+    def copy_script(commands: Iterable[str]):
+        pyperclip.copy("\n".join(commands) + "\n")
 
     # Constructor
     def __init__(self, device_id: str = None, hostname: str = "NetworkDevice",
