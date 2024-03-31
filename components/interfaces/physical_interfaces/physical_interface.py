@@ -1,6 +1,5 @@
 from typing import List, Union, TYPE_CHECKING
 from components.interfaces.interface import Interface
-# import components.devices.network_device as device
 from colorama import Fore, Style
 from enum import Enum
 
@@ -41,8 +40,8 @@ class PhysicalInterface(Interface):
             "description": [f"description \"{self.description}\""],
             "shutdown": ["shutdown"],
             "bandwidth": [f"bandwidth {self.bandwidth}"],
-            "mtu": [f"mtu {self.mtu}"],
-            "duplex": [f"duplex {self.duplex}"]
+            "mtu": [],
+            "duplex": []
         })
 
     # Check if the interface type is actually a physical interface (e.g. Ethernet)
@@ -102,14 +101,15 @@ class PhysicalInterface(Interface):
                 self.shutdown_state = False
                 self._cisco_commands["shutdown"] = ["no shutdown"]
 
-    """
-    Description: Establishes a connection. It basically sets the remote device 
-    and its respective port to the ones given in the parameter.
-    
-    Parameters: Network device, its port and the new bandwidth. (In case if an ethernet cable of lower bandwidth is used, 
-    the 'new_bandwidth' parameter is used to reduce the bandwidth)
-    """
     def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
+        """
+        Description: Establishes a connection. It basically sets the remote device
+        and its respective port to the ones given in the parameter.
+
+        Parameters: Network device, its port and the new bandwidth. (In case if an ethernet cable of lower bandwidth is
+        used,
+        the 'new_bandwidth' parameter is used to reduce the bandwidth)
+        """
         # NOTE: In case a cable of slower bandwidth is used, the 'cable_bandwidth' is used
 
         # Check if the interface is already connected to another device
