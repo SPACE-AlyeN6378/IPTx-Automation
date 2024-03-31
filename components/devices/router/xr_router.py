@@ -235,6 +235,6 @@ class XRRouter(Router):
 
     def generate_script(self) -> List[str]:
         script = super().generate_script()
-        script.remove("write memory")
+        script.remove("do write memory")
 
         return script

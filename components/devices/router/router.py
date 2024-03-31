@@ -334,5 +334,5 @@ class Router(NetworkDevice):
             script.extend(self._routing_commands[attr])
             self._routing_commands[attr].clear()
 
-        script.append("write memory")
+        script.append("do write memory")
         return script
