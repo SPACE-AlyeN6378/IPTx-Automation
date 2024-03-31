@@ -159,7 +159,7 @@ class Router(NetworkDevice):
                 self._routing_commands["ospf"].append(f"passive-interface {str(interface)}")
 
         if self._any_mpls_interfaces():
-            self._routing_commands["ospf"].append("mpls ldp sync")
+            self._routing_commands["ospf"].append("mpls ldp autoconfig")
 
         self._routing_commands["ospf"].append("exit")
 
@@ -270,7 +270,7 @@ class Router(NetworkDevice):
         """
         if self._any_mpls_interfaces() and not self.__mpls_configured:
             self._routing_commands["mpls"] = [
-                "mpls ldp router-id Loopback0",
+                "mpls ldp router-id Loopback0 force",
                 "mpls label protocol ldp"
             ]
 
