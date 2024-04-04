@@ -33,7 +33,7 @@ class XRRouter(Router):
         for vrf in self.vrfs:
             self._starter_commands["vrf"].extend(vrf.get_xr_setup_cmd())
 
-    def begin_internal_routing(self) -> None:
+    def begin_internal_routing(self, mpls_ldp_sync: bool = True) -> None:
         super().begin_internal_routing()
 
         # Regenerate Cisco command to translate to XR configuration script
@@ -52,11 +52,11 @@ class XRRouter(Router):
 
                 if interface.int_type == "Loopback":
                     # Add the XR commands
-                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
+                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands(mpls_ldp_sync))
 
                 elif interface.remote_device is not None and not interface.egp:
                     # Add the XR commands
-                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
+                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands(mpls_ldp_sync))
 
             self._routing_commands["ospf"].append("exit")
 
@@ -180,7 +180,6 @@ class XRRouter(Router):
             if redistribution_to_egp:
                 redistribution_to_external_routes()
             close_out()
-
 
         execute_function()
 

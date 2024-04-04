@@ -41,7 +41,8 @@ class PhysicalInterface(Interface):
             "shutdown": ["shutdown"],
             "bandwidth": [f"bandwidth {self.bandwidth}"],
             "mtu": [],
-            "duplex": []
+            "duplex": [],
+            "other": ["load-interval 30", "negotiation auto"]
         })
 
     # Check if the interface type is actually a physical interface (e.g. Ethernet)
@@ -121,7 +122,7 @@ class PhysicalInterface(Interface):
         self.remote_port = remote_port
 
         # Change the description
-        self.config(description=f"Connected to >>> {self.remote_device} >>> Port {self.remote_port}")
+        self.config(description=f"BACKBONE_P2P_CONN_WITH_{self.remote_device}")
 
         # Release the interface
         self.release()

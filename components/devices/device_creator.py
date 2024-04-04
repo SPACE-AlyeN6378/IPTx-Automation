@@ -30,12 +30,14 @@ def cisco_7200_v1(rtr_id: str, name: str, as_number: int = None) -> Router:
     return router
 
 
-def cisco_7200_v2(rtr_id: str, name: str, as_number: int = None) -> Router:
-    port_numbers = ["0/0", "0/1"]
+def cisco_7200(rtr_id: str, name: str, as_number: int = None) -> Router:
     router = Router(
         router_id=rtr_id,
         hostname=name,
-        interfaces=[RouterInterface("FastEthernet", port_number) for port_number in port_numbers]
+        interfaces=[
+            RouterInterface("FastEthernet", "0/0"),
+            RouterInterface("FastEthernet", "0/1")
+        ]
     )
     router.add_interface(RouterInterface("GigabitEthernet", "1/0"))
     if as_number:
@@ -45,9 +47,17 @@ def cisco_7200_v2(rtr_id: str, name: str, as_number: int = None) -> Router:
 
 
 def cisco_xr_9000(rtr_id: str, name: str) -> Router:
-    port_numbers = Interface.range("0/0/0", range_(0, 7))
     return Router(
         router_id=rtr_id,
         hostname=name,
-        interfaces=[RouterInterface("GigabitEthernet", port_number) for port_number in port_numbers],
+        interfaces=[
+            RouterInterface("GigabitEthernet", "0/0/0/0"),
+            RouterInterface("GigabitEthernet", "0/0/0/1"),
+            RouterInterface("GigabitEthernet", "0/0/0/2"),
+            RouterInterface("GigabitEthernet", "0/0/0/3"),
+            RouterInterface("GigabitEthernet", "0/0/0/4"),
+            RouterInterface("GigabitEthernet", "0/0/0/5"),
+            RouterInterface("GigabitEthernet", "0/0/0/6"),
+            RouterInterface("GigabitEthernet", "0/0/0/7")
+        ],
     )

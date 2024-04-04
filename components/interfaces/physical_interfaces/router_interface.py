@@ -39,12 +39,12 @@ class RouterInterface(PhysicalInterface):
         })
 
         # OSPF commands (segregated for XR configuration)
-        self.__more_ospf_commands = {
+        self.__ospf_commands = {
             "network": [],
             "passive": [],
             "priority": [],
             "md5_auth": [],
-            "mpls": []
+            "mpls_ldp": []
         }
 
     @staticmethod
@@ -111,9 +111,9 @@ class RouterInterface(PhysicalInterface):
                 self.ospf_p2p = p2p
 
                 if self.ospf_p2p:
-                    self.__more_ospf_commands["network"] = ["network point-to-point"]
+                    self.__ospf_commands["network"] = ["network point-to-point"]
                 else:
-                    self.__more_ospf_commands["network"] = ["network point-to-multipoint"]
+                    self.__ospf_commands["network"] = ["network point-to-multipoint"]
 
         else:   # In EGP mode
             print_denied("This interface is for routing across autonomous systems "
@@ -122,16 +122,16 @@ class RouterInterface(PhysicalInterface):
     def ospf_passive_enable(self):
         self.ospf_allow_hellos = False
         if self.xr_mode:
-            self.__more_ospf_commands["passive"] = ["passive enable"]
+            self.__ospf_commands["passive"] = ["passive enable"]
 
     def ospf_passive_disable(self):
         self.ospf_allow_hellos = True
         if self.xr_mode:
-            if self.__more_ospf_commands["passive"][0] == "passive enable":
-                self.__more_ospf_commands["passive"].clear()
+            if self.__ospf_commands["passive"][0] == "passive enable":
+                self.__ospf_commands["passive"].clear()
 
             else:
-                self.__more_ospf_commands["passive"] = ["passive disable"]
+                self.__ospf_commands["passive"] = ["passive disable"]
 
     def ospf_set_priority(self, priority) -> None:
 
@@ -140,7 +140,7 @@ class RouterInterface(PhysicalInterface):
                 raise ValueError(f"Invalid priority number '{priority}': Must be between 0 and 255")
 
             self.ospf_priority = priority
-            self.__more_ospf_commands["priority"] = [f"priority {priority}"]
+            self.__ospf_commands["priority"] = [f"priority {priority}"]
 
         else:
             print(f"{Fore.MAGENTA}DENIED: This is configured as a point-to-point interface, so changing "
@@ -157,10 +157,10 @@ class RouterInterface(PhysicalInterface):
             raise NetworkError("Only one password can be added or modified")
 
         if not self.__md5_auth_enabled:
-            self.__more_ospf_commands["md5_auth"].append("authentication message-digest")
+            self.__ospf_commands["md5_auth"].append("authentication message-digest")
             self.__md5_auth_enabled = True
 
-        self.__more_ospf_commands["md5_auth"].append(f"message-digest-key {key} md5 7 {password}")
+        self.__ospf_commands["md5_auth"].append(f"message-digest-key {key} md5 7 {password}")
 
     def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
         super().connect_to(remote_device, remote_port, cable_bandwidth)
@@ -186,34 +186,22 @@ class RouterInterface(PhysicalInterface):
         self.print_log("Enabling MPLS")
 
         # Generate the Cisco command
-        if self.xr_mode:
-            self.__more_ospf_commands["mpls"] = ["mpls ldp sync"]
-        else:
+        if not self.xr_mode:
             self._cisco_commands["mpls"] = ["mpls ip"]
-
-    def mpls_disable(self) -> None:
-        # Set it to False
-        self.mpls_enabled = False
-
-        # Generate Cisco commands
-        if self.xr_mode:
-            self.__more_ospf_commands["mpls"] = ["no mpls ldp sync"]
-        else:
-            self._cisco_commands["mpls"] = ["no mpls ip", "no mpls label protocol ldp"]
 
     def generate_command_block(self) -> List[str]:
         # Modify the commands for any XR routing configuration
         if not self.xr_mode:
             # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
-            for attribute in self.__more_ospf_commands.keys():
-                if self.__more_ospf_commands[attribute]:
+            for attribute in self.__ospf_commands.keys():
+                if self.__ospf_commands[attribute]:
                     self._cisco_commands["ospf"].extend(f"ip ospf {line}" for
-                                                        line in self.__more_ospf_commands[attribute])
+                                                        line in self.__ospf_commands[attribute])
 
-                self.__more_ospf_commands[attribute].clear()
+                self.__ospf_commands[attribute].clear()
 
         else:
-            # Replace IP with IPv4 in the IP Address section of the command, and add VRF
+            # Replace IP with IPv4 in the IP Address section
             if self._cisco_commands["ip address"]:
                 if 'ipv6' not in self._cisco_commands["ip address"][0]:
                     self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
@@ -221,18 +209,22 @@ class RouterInterface(PhysicalInterface):
         return super().generate_command_block()
 
     # Generate OSPF XR advertisement command
-    def generate_ospf_xr_commands(self) -> List[str]:
+    def generate_ospf_xr_commands(self, mpls_ldp_sync: bool) -> List[str]:
         # First, generate the command
-        commands = [line for lines in self.__more_ospf_commands.values() for line in lines]
+        if self.mpls_enabled and mpls_ldp_sync:
+            self.__ospf_commands["mpls_ldp"] = ["mpls ldp sync"]
+
+        commands = [line for lines in self.__ospf_commands.values() for line in lines]
         commands.insert(0, f"interface {str(self)}")
         commands.append("exit")
 
         # Clear the dictionary of commands
-        self.__more_ospf_commands = {
+        self.__ospf_commands = {
             "network": [],
             "passive": [],
             "priority": [],
-            "md5_auth": []
+            "md5_auth": [],
+            "mpls_ldp": []
         }
 
         return commands

@@ -146,11 +146,16 @@ class Backbone(Topology):
         self[device_id1].interface(port1).mpls_enable()
         self[device_id2].interface(port2).mpls_enable()
 
+        # Configure the description for both the interfaces
+        self[device_id1].interface(port1).config(description=f"BACKBONE_P2P_CONN_WITH::{self[device_id2]}")
+        self[device_id2].interface(port2).config(description=f"BACKBONE_P2P_CONN_WITH::{self[device_id1]}")
+
         # They are internal connections
         self.get_link(device_id1, device_id2)[2]["external"] = False
 
     def connect_client(self, client_device: Router | Switch, client_port: str,
-                       bkb_router_id: str | int, bkb_router_port: str, cable_bandwidth: int = None):
+                       bkb_router_id: str | int, bkb_router_port: str, client_group: str,
+                       cable_bandwidth: int = None):
 
         self.print_log(f"Requesting external connection of Client {str(client_device)} to the backbone...")
 
@@ -173,6 +178,12 @@ class Backbone(Topology):
         self[bkb_router_id].interface(bkb_router_port).egp = True
         self.get_link(client_device.id(), bkb_router_id)[2]["external"] = True
 
+        # Configure the description for both the interfaces
+        (self[client_device.id()].interface(client_port)
+         .config(description=f"BACKBONE_CONNECTION_WITH_{self[bkb_router_id]}_AS:{self.as_number}"))
+        (self[bkb_router_id].interface(bkb_router_port)
+         .config(description=f"CLIENT_CONNECTION_WITH::{self[client_device.id()]}"))
+
     def get_all_client_devices(self) -> list[Router | Switch]:
         return ([device for device in self.get_all_routers() if device.as_number != self.as_number]
                 + self.get_all_switches())
@@ -184,4 +195,3 @@ class Backbone(Topology):
                 print_log(f"Beginning route in {str(router)}...")
                 router.reference_bw = self.reference_bw
                 router.begin_internal_routing()
-                router.send_script()

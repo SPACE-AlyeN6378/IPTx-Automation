@@ -23,6 +23,7 @@ class L3VPNBackbone(Backbone):
         # VPN Configuration
         self.__vpn_graph = nx.MultiDiGraph()
         self.__vrf_index = 0
+
         self.__color_index = 0
 
     def select_route_reflector(self, router_id: str) -> None:
@@ -196,15 +197,16 @@ class L3VPNBackbone(Backbone):
         self.assign_network_ip_address(network_address, bkb_router_id, client_device.id())
 
         # VRF Assignment
-        if new_vrf is not None:
-            vrf: str = self.add_vrf(new_vrf, bkb_router_id, bkb_router_port)
-            self.get_link(client_device.id(), bkb_router_id)[2]["vrf"] = vrf
-            self[client_device.id()].node_color = self.get_vrf(vrf).color
+        vrf: str = "Unknown"
 
+        if new_vrf is not None:
+            vrf = self.add_vrf(new_vrf, bkb_router_id, bkb_router_port)
         elif existing_vrf_id is not None:
-            self.set_vrf_to_port(existing_vrf_id, bkb_router_id, bkb_router_port)
-            self.get_link(client_device.id(), bkb_router_id)[2]["vrf"] = existing_vrf_id
-            self[client_device.id()].node_color = self.get_vrf(existing_vrf_id).color
+            vrf = existing_vrf_id
+            self.set_vrf_to_port(vrf, bkb_router_id, bkb_router_port)
+
+        self.get_link(client_device.id(), bkb_router_id)[2]["vrf"] = vrf
+        self[client_device.id()].node_color = self.get_vrf(vrf).color
 
         # Static or dynamic
         self[client_device.id()].interface(client_port).static_routing = static_routing
@@ -214,6 +216,10 @@ class L3VPNBackbone(Backbone):
         # Client routing configuration
         self[client_device.id()].client_connection_routing(client_port)
         self[client_device.id()].send_script()
+
+        # Update client description
+        (self[bkb_router_id].interface(bkb_router_port)
+         .config(description=f"CLIENT_{vrf}::CONNECTION_WITH_{self[client_device.id()]}"))
 
     def print_client_links(self) -> None:
         def bool_to_str(bool_value: bool) -> str:
@@ -243,8 +249,6 @@ class L3VPNBackbone(Backbone):
             router.reference_bw = self.reference_bw
             router.begin_internal_routing()
 
-            router.send_script(print_to_console)
-
     def begin_bgp_routing(self, print_to_console: bool = True) -> None:
         provider_edges = [router for router in self.get_all_routers() if router.as_number == self.as_number
                           and router.is_provider_edge() and not router.route_reflector]
@@ -266,4 +270,3 @@ class L3VPNBackbone(Backbone):
                 ibgp_neighbor_ids=[self.route_reflector],
                 redistribution_to_egp=True
             )
-            router.send_script(print_to_console)

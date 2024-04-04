@@ -153,8 +153,11 @@ class NetworkDevice:
     def all_interfaces(self) -> List[Any]:
         return self.__phys_interfaces + self.__loopbacks
 
-    def get_max_bandwidth(self) -> int:
-        return max(interface.bandwidth for interface in self.all_phys_interfaces())
+    def get_max_bandwidth(self, in_mbps: bool = False) -> int:
+        if in_mbps:
+            return max(interface.bandwidth for interface in self.all_phys_interfaces()) // 1000
+        else:
+            return max(interface.bandwidth for interface in self.all_phys_interfaces())
 
     def remote_device(self, port) -> NetworkDevice:
         device = self.interface(port).remote_device

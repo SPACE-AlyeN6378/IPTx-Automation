@@ -15,6 +15,9 @@ class VLAN:
                                       "VLAN. Rather serves as a placeholder for certain configuration or management "
                                       "purposes.")
 
+            elif vlan_id == 3:
+                raise ConnectionError("In F@H, VLAN 3 is used for switch identification.")
+
         else:
             raise ValueError(f"Invalid ID '{vlan_id}' - The VLAN ID must be between 2 and 4094")
 
@@ -45,3 +48,9 @@ class VLAN:
             ios_commands.extend(self.interface.generate_command_block())
 
         return ios_commands
+
+    def generate_init_cmd(self) -> List[str]:
+        return [
+            f"vlan {self.vlan_id}",
+            "exit"
+        ]

@@ -27,7 +27,7 @@ class Router(NetworkDevice):
         self.add_interface(*interfaces)
 
         # Reference bandwidth
-        self.reference_bw = self.get_max_bandwidth() // 1000
+        self.reference_bw = 100000    # Reference bandwidth set to the
 
         # VRF
         self.vrfs: set[VRF] = set()
@@ -135,7 +135,7 @@ class Router(NetworkDevice):
         if self.hostname.endswith("-RR"):
             self.set_hostname(self.hostname.replace("-RR", ""))
 
-    def begin_internal_routing(self) -> None:
+    def begin_internal_routing(self, mpls_ldp_sync: bool = False) -> None:
         # Configure OSPF for all interfaces
         for interface in self.all_phys_interfaces():
             # The interface should be connected to another router, and within autonomous system
@@ -160,6 +160,9 @@ class Router(NetworkDevice):
 
         if self._any_mpls_interfaces():
             self._routing_commands["ospf"].append("mpls ldp autoconfig")
+
+            if mpls_ldp_sync:
+                self._routing_commands["ospf"].append("mpls ldp sync")
 
         self._routing_commands["ospf"].append("exit")
 
