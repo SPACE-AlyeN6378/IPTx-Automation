@@ -1,4 +1,5 @@
 from components.devices.router.router import Router, RouterInterface
+from components.devices.router.xr_router import XRRouter
 from components.interfaces.interface import Interface
 from iptx_utils import range_
 
@@ -47,7 +48,7 @@ def cisco_7200(rtr_id: str, name: str, as_number: int = None) -> Router:
 
 
 def cisco_xr_9000(rtr_id: str, name: str) -> Router:
-    return Router(
+    return XRRouter(
         router_id=rtr_id,
         hostname=name,
         interfaces=[

@@ -60,6 +60,9 @@ class NetworkDevice:
                 else:
                     indent_size += 1
 
+            if command_line == "mpls ldp":
+                indent_size += 1
+
             if command_line[:8] == "neighbor" and not command_line[:14] == "neighbor-group":
                 if not any(substr in command_line for substr in ["remote-as",
                                                                  "update-source",

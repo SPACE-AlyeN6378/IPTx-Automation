@@ -33,7 +33,7 @@ class Router(NetworkDevice):
         self.vrfs: set[VRF] = set()
 
         # MPLS
-        self.__mpls_configured: bool = False
+        self._mpls_configured: bool = False
 
         # Cisco commands
         self._starter_commands.update({
@@ -266,18 +266,18 @@ class Router(NetworkDevice):
         else:
             print_denied("The BGP routing is not yet initialized")
 
-    def __mpls_ldp_activate(self) -> None:
+    def _mpls_ldp_activate(self) -> None:
         """
         If MPLS is enabled in any interfaces, enable LDP synchronization
         :return:
         """
-        if self._any_mpls_interfaces() and not self.__mpls_configured:
+        if self._any_mpls_interfaces() and not self._mpls_configured:
             self._routing_commands["mpls"] = [
                 "mpls ldp router-id Loopback0 force",
                 "mpls label protocol ldp"
             ]
 
-            self.__mpls_configured = True
+            self._mpls_configured = True
 
     def client_connection_routing(self, interface_port: str) -> None:
         chosen_interface = self.interface(interface_port)
@@ -311,7 +311,7 @@ class Router(NetworkDevice):
         script = []
 
         # # Generate a script for any MPLS routing
-        self.__mpls_ldp_activate()
+        self._mpls_ldp_activate()
 
         # Transfer all the VRF commands to a single list
         self._consolidate_vrf_setup_commands()

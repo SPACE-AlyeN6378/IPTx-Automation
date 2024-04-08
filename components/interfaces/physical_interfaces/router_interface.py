@@ -35,7 +35,8 @@ class RouterInterface(PhysicalInterface):
 
         self._cisco_commands.update({
             "ospf": [],
-            "mpls": []
+            "mpls": [],
+            "service_instance": []
         })
 
         # OSPF commands (segregated for XR configuration)
@@ -46,6 +47,8 @@ class RouterInterface(PhysicalInterface):
             "md5_auth": [],
             "mpls_ldp": []
         }
+
+        self.__service_instance_commands = dict()
 
     @staticmethod
     def p2p_ip_addresses(network_address: str):
@@ -228,3 +231,5 @@ class RouterInterface(PhysicalInterface):
         }
 
         return commands
+
+    # def generate_pseudowire_config(self, vlan_id: int, neighbor_id: int):

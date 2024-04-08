@@ -52,7 +52,7 @@ class XRRouter(Router):
 
                 if interface.int_type == "Loopback":
                     # Add the XR commands
-                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands(mpls_ldp_sync))
+                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands())
 
                 elif interface.remote_device is not None and not interface.egp:
                     # Add the XR commands
@@ -183,8 +183,8 @@ class XRRouter(Router):
 
         execute_function()
 
-    def __mpls_ldp_activate(self) -> None:
-        if self._any_mpls_interfaces() and not self.__mpls_configured:
+    def _mpls_ldp_activate(self) -> None:
+        if self._any_mpls_interfaces() and not self._mpls_configured:
             self._routing_commands["mpls"] = [
                 "mpls ldp",
                 f"router-id {self.id()}"

@@ -1,6 +1,8 @@
 from components.interfaces.interface import Interface
 from typing import List
 
+from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
+
 
 # ENUMS
 
@@ -15,9 +17,6 @@ class VLAN:
                                       "VLAN. Rather serves as a placeholder for certain configuration or management "
                                       "purposes.")
 
-            elif vlan_id == 3:
-                raise ConnectionError("In F@H, VLAN 3 is used for switch identification.")
-
         else:
             raise ValueError(f"Invalid ID '{vlan_id}' - The VLAN ID must be between 2 and 4094")
 
@@ -25,32 +24,27 @@ class VLAN:
         VLAN.valid_id_check(vlan_id)
         self.vlan_id = vlan_id
         self.name = name
-        self.interface = Interface("VLAN", vlan_id, cidr)  # For SVI routing
+        self.vlan_as_interface = Interface("VLAN", vlan_id, cidr)  # For SVI routing
+        self.assigned_routers: set[PhysicalInterface] = set()
 
         self._stp_primary_device = None
 
-    def config(self, name: str = None, cidr: str = None):
-
-        # Generate Cisco command
-        ios_commands = [f"vlan {self.vlan_id}"]
-
-        # Update
+    def config(self, name: str = None, cidr: str = None) -> None:
         if name:
             self.name = name
 
-        if self.name:
-            ios_commands.append(f"name {self.name}")
-
-        ios_commands.append("exit")
-
         if cidr:
-            self.interface.config(cidr=cidr)
-            ios_commands.extend(self.interface.generate_command_block())
+            self.vlan_as_interface.config(cidr=cidr)
 
-        return ios_commands
-
+    # For switches =======================================
     def generate_init_cmd(self) -> List[str]:
         return [
             f"vlan {self.vlan_id}",
+            f"name {self.name}",
             "exit"
         ]
+
+    def generate_interface_cmd(self) -> List[str]:
+        configs = self.vlan_as_interface.generate_command_block()
+        configs.insert(-1, "no shutdown")
+        return configs

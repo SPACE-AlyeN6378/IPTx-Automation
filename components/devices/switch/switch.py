@@ -1,6 +1,6 @@
 from __future__ import annotations
 from components.devices.network_device import NetworkDevice
-from components.interfaces.vlan import VLAN
+from components.devices.switch.vlan import VLAN
 from components.devices.notfound_error import NotFoundError
 from typing import Union, Set, Iterable, List
 from enum import Enum
@@ -9,7 +9,7 @@ from iptx_utils import SwitchportError
 
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
-from list_helper import list_to_str, replace_key
+from list_helper import replace_key
 
 
 class Mode(Enum):  # ENUM for switchport modes
