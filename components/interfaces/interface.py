@@ -62,7 +62,7 @@ class Interface:
         Interface.validate_port(self.int_type, self.port)  # Check if the port number is of the valid format
 
         # Cisco IOS commands
-        self._cisco_commands = {
+        self._cisco_commands: dict[str, list[str]] = {
             "vrf": [],  # Will be used in routers and switches, not here (just to maintain the sequence)
             "ip address": [],
             "description": []
@@ -131,7 +131,7 @@ class Interface:
     # Goes to router interface
 
     # Generates a block of commands
-    def generate_command_block(self):
+    def generate_config(self):
         # Gets a new list of commands
         command_block = [f"interface {str(self)}"]
 

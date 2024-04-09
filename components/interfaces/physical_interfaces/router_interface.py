@@ -1,4 +1,5 @@
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
+from components.interfaces.physical_interfaces.subinterface import SubInterface
 from typing import List, TYPE_CHECKING, Dict
 from components.devices.switch.switch import Switch
 from colorama import Fore, Style
@@ -30,13 +31,17 @@ class RouterInterface(PhysicalInterface):
         self.vrf_name: str | None = None
         self.static_routing: bool = False
 
+        # Pseudo-wire
+        self.use_service_instance = False
+        self.__pseudowire_commands: dict[int, List[str]] = dict()
+
         self.egp: bool = False
         self.ebgp_neighbor_confirmed: bool = False
 
         self._cisco_commands.update({
             "ospf": [],
             "mpls": [],
-            "service_instance": []
+            "pseudo-wire": []
         })
 
         # OSPF commands (segregated for XR configuration)
@@ -48,8 +53,6 @@ class RouterInterface(PhysicalInterface):
             "mpls_ldp": []
         }
 
-        self.__service_instance_commands = dict()
-
     @staticmethod
     def p2p_ip_addresses(network_address: str):
 
@@ -60,7 +63,7 @@ class RouterInterface(PhysicalInterface):
         ip_int1, ip_int2 = int(network_address_obj[0]) + 1, int(network_address_obj[0]) + 2
         ip1, ip2 = ipaddress.IPv4Address(ip_int1), ipaddress.IPv4Address(ip_int2)
 
-        return str(ip1)+'/30', str(ip2)+'/30'
+        return str(ip1) + '/30', str(ip2) + '/30'
 
     def assign_vrf(self, vrf_name: str) -> None:
         if self.vrf_name is not None:
@@ -118,7 +121,7 @@ class RouterInterface(PhysicalInterface):
                 else:
                     self.__ospf_commands["network"] = ["network point-to-multipoint"]
 
-        else:   # In EGP mode
+        else:  # In EGP mode
             print_denied("This interface is for routing across autonomous systems "
                          "or configured as VRF, so OSPF cannot be configured")
 
@@ -192,16 +195,18 @@ class RouterInterface(PhysicalInterface):
         if not self.xr_mode:
             self._cisco_commands["mpls"] = ["mpls ip"]
 
-    def generate_command_block(self) -> List[str]:
+    def generate_config(self) -> List[str]:
         # Modify the commands for any XR routing configuration
         if not self.xr_mode:
             # Transfer all the OSPF commands to the main self._cisco_commands, except for passive
             for attribute in self.__ospf_commands.keys():
-                if self.__ospf_commands[attribute]:
-                    self._cisco_commands["ospf"].extend(f"ip ospf {line}" for
-                                                        line in self.__ospf_commands[attribute])
-
+                self._cisco_commands["ospf"].extend(f"ip ospf {line}" for
+                                                    line in self.__ospf_commands[attribute])
                 self.__ospf_commands[attribute].clear()
+
+            for attribute in self.__pseudowire_commands.keys():
+                self._cisco_commands["pseudo-wire"].extend(f"ip ospf {line}" for
+                                                           line in self.__ospf_commands[attribute])
 
         else:
             # Replace IP with IPv4 in the IP Address section
@@ -209,7 +214,7 @@ class RouterInterface(PhysicalInterface):
                 if 'ipv6' not in self._cisco_commands["ip address"][0]:
                     self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
 
-        return super().generate_command_block()
+        return super().generate_config()
 
     # Generate OSPF XR advertisement command
     def generate_ospf_xr_commands(self, mpls_ldp_sync: bool) -> List[str]:
@@ -232,4 +237,18 @@ class RouterInterface(PhysicalInterface):
 
         return commands
 
-    # def generate_pseudowire_config(self, vlan_id: int, neighbor_id: int):
+    # L2VPN Configuration
+    def add_sub_if(self, vlan_id: int) -> None:
+        sub_interface = SubInterface(self.int_type, self.port, vlan_id, mtu=self.mtu)
+        sub_interface.xr_mode = self.xr_mode
+        self.sub_interfaces.add(sub_interface)
+
+    def generate_pseudowire_config(self, vlan_id: int, neighbor_id: int) -> None:
+        if self.use_service_instance and not self.xr_mode:
+            self.__pseudowire_commands[vlan_id] = [
+                f"service instance {vlan_id} ethernet",
+                f"encapsulation dot1q {vlan_id}",
+                f"xconnect {neighbor_id} {vlan_id} encapsulation mpls",
+                f"mtu {self.mtu}",
+                "exit"
+            ]

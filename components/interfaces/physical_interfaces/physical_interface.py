@@ -2,10 +2,10 @@ from typing import List, Union, TYPE_CHECKING
 from components.interfaces.interface import Interface
 from colorama import Fore, Style
 from enum import Enum
+from components.interfaces.physical_interfaces.subinterface import SubInterface
 
 if TYPE_CHECKING:
     from components.devices.network_device import NetworkDevice
-
 
 class Mode(Enum):  # ENUM for switchport modes
     NULL = 0
@@ -14,8 +14,15 @@ class Mode(Enum):  # ENUM for switchport modes
 
 
 class PhysicalInterface(Interface):
-    BANDWIDTHS = {"ATM": 622000, "Ethernet": 10000, "FastEthernet": 100000, "GigabitEthernet": 1000000,
-                  "TenGigabitEthernet": 10000000, "Serial": 1544, "wlan-gigabitethernet": 1000000}
+    BANDWIDTHS = {
+        "ATM": 622000,
+        "Ethernet": 10000,
+        "FastEthernet": 100000,
+        "GigabitEthernet": 1000000,
+        "TenGigabitEthernet": 10000000,
+        "Serial": 1544,
+        "wlan-gigabitethernet": 1000000
+    }
 
     def __init__(self, int_type: str, port: Union[str, int], cidr: str = None) -> None:
 
@@ -25,11 +32,14 @@ class PhysicalInterface(Interface):
 
         # New attributes
         self.shutdown_state = True
-        self.ul_bandwidth = PhysicalInterface.BANDWIDTHS[int_type]     # Upper limit bandwidth
+        self.max_allowable_bw = PhysicalInterface.BANDWIDTHS[int_type]
         self.bandwidth = PhysicalInterface.BANDWIDTHS[int_type]
         self.mtu = 1500
         self.duplex = "auto"
         self.egp = False
+
+        # List of Sub-interfaces
+        self.sub_interfaces: set[SubInterface] = set()
 
         # Used when a connection is established, otherwise
         self.remote_device = None
@@ -39,14 +49,14 @@ class PhysicalInterface(Interface):
         self._cisco_commands.update({
             "description": [f"description \"{self.description}\""],
             "shutdown": ["shutdown"],
-            "bandwidth": [f"bandwidth {self.bandwidth}"],
+            "bandwidth": [],
             "mtu": [],
             "duplex": [],
             "other": ["load-interval 30", "negotiation auto"]
         })
 
-    # Check if the interface type is actually a physical interface (e.g. Ethernet)
     def validate_interface_type(self) -> None:
+        # Check if the interface type is actually a physical interface (e.g. Ethernet)
         default_types = PhysicalInterface.BANDWIDTHS.keys()
 
         if self.int_type not in default_types:
@@ -66,10 +76,10 @@ class PhysicalInterface(Interface):
             """
             If the bandwidth exceeds the maximum allowable bandwidth, then it caps it down to the given maximum
             """
-            if bandwidth > self.ul_bandwidth:
+            if bandwidth > self.max_allowable_bw:
                 print(f"{Fore.YELLOW}WARNING: The bandwidth {bandwidth} bps in the parameter exceeds the maximum "
-                      f"bandwidth {self.ul_bandwidth} bps. Capping it to the given maximum...{Style.RESET_ALL}")
-                self.bandwidth = self.ul_bandwidth
+                      f"bandwidth {self.max_allowable_bw} bps. Capping it to the given maximum...{Style.RESET_ALL}")
+                self.bandwidth = self.max_allowable_bw
             else:
                 self.bandwidth = bandwidth
 
@@ -102,7 +112,7 @@ class PhysicalInterface(Interface):
                 self.shutdown_state = False
                 self._cisco_commands["shutdown"] = ["no shutdown"]
 
-    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = None) -> None:
+    def connect_to(self, remote_device: 'NetworkDevice', remote_port: str, cable_bandwidth: int = float('inf')) -> None:
         """
         Description: Establishes a connection. It basically sets the remote device
         and its respective port to the ones given in the parameter.
@@ -129,19 +139,9 @@ class PhysicalInterface(Interface):
 
         # Reduce the bandwidth, if necessary
         remote_int_bandwidth = self.remote_device.interface(remote_port).bandwidth  # Bandwidth on the remote device
-
-        if remote_int_bandwidth < self.bandwidth:   # If the bandwidth at the remote port is lower
-            self.ul_bandwidth = remote_int_bandwidth   # Set the maximum bandwidth
-            self.config(bandwidth=self.ul_bandwidth)
-
-        if cable_bandwidth:
-            if cable_bandwidth <= self.bandwidth:
-                self.config(bandwidth=cable_bandwidth)
-            else:
-                print(f"{Fore.YELLOW}WARNING: The cable of faster bandwidth {cable_bandwidth} kBit/s will not be "
-                      f"incorporated. Using the interface bandwidth...{Style.RESET_ALL}")
-
-        # else, I'll assume you're using a cable of the same interface bandwidth as the one included
+        self.max_allowable_bw = min(remote_int_bandwidth, self.bandwidth)
+        new_bandwidth = min(remote_int_bandwidth, self.bandwidth, cable_bandwidth)
+        self.config(bandwidth=new_bandwidth)
 
         # Maximize the MTU
         remote_int_mtu = self.remote_device.interface(remote_port).mtu
@@ -162,7 +162,7 @@ class PhysicalInterface(Interface):
         self.config(description=f"UNCONNECTED")
 
         # Set the bandwidth to default
-        self.ul_bandwidth = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]
+        self.max_allowable_bw = self.bandwidth = PhysicalInterface.BANDWIDTHS[self.int_type]
         self.shutdown()
 
     def __eq__(self, other):
@@ -183,3 +183,20 @@ class PhysicalInterface(Interface):
                      self.ip_address, self.subnet_mask,
                      self.device_id, self.mtu, self.duplex,
                      self.remote_device))
+
+    def add_sub_if(self, vlan_id: int) -> None:
+        self.sub_interfaces.add(SubInterface(self.int_type, self.port, vlan_id, mtu=self.mtu))
+
+    def get_sub_if(self, vlan_id: int) -> SubInterface | None:
+        for interface in self.sub_interfaces:
+            if interface.vlan_id == vlan_id:
+                return interface
+
+        return None
+
+    def generate_config(self) -> List[str]:
+        main_config = super().generate_config()
+        for sub_interface in self.sub_interfaces:
+            main_config.extend(sub_interface.generate_config())
+
+        return main_config
