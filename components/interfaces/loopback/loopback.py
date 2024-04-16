@@ -41,12 +41,12 @@ class Loopback(Interface):
                 f"ip ospf {process_id} area {self.ospf_area}"
             ]
 
-    def generate_command_block(self):
+    def generate_config(self):
         if self.xr_mode:
             if self._cisco_commands["ip address"]:
                 self._cisco_commands["ip address"][0] = self._cisco_commands["ip address"][0].replace("ip", "ipv4")
 
-        return super().generate_command_block()
+        return super().generate_config()
 
     def generate_ospf_xr_commands(self) -> List[str]:
         if self.__ospf_xr_commands:

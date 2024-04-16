@@ -112,8 +112,9 @@ class L3VPNBackbone(Backbone):
         print(tabulate(data, headers="keys", tablefmt='grid'))
         print()
 
-    def vpn_connection(self, source: str, destination: str, allow_log: bool = True) -> None:
+    def vpn_route_target(self, source: str, destination: str, two_way: bool = False) -> None:
 
+        print_log(f"VRF route target {source} ---> {destination}")
         # Prevent duplicate edges
         if not self.__vpn_graph.has_edge(source, destination):
             self.__vpn_graph.add_edge(source, destination)
@@ -122,9 +123,9 @@ class L3VPNBackbone(Backbone):
         destination_rd: int = self.get_vrf(destination).rd
         self.get_vrf(source).set_route_targets(destination_rd)
 
-        # if allow_log:
-        #     print_log(f"VRF Route-target: {self.__vpn_graph.nodes[source]['name']} ---> "
-        #               f"{self.__vpn_graph.nodes[destination]['name']}", 0)
+        if two_way:
+            self.vpn_route_target(destination, source, two_way=False)
+
 
     # def vpn_two_way_connection(self, vrf1: int | str, vrf2: int | str) -> None:
     #     # If a name is passed for the VRF 1, take the corresponding RD
@@ -184,14 +185,15 @@ class L3VPNBackbone(Backbone):
         plt.show()
 
     def connect_client(self, client_device: Router, client_port: str,
-                       bkb_router_id: str, bkb_router_port: str, cable_bandwidth: int = None,
-                       network_address: str = None, new_vrf: str = None, existing_vrf_id: str = None,
+                       bkb_router_id: str, bkb_router_port: str, cable_bandwidth: int = float('inf'),
+                       custom_scr: int = None, network_address: str = None, new_vrf: str = None,
+                       existing_vrf_id: str = None,
                        static_routing: bool = False) -> None:
 
         if not (new_vrf or existing_vrf_id):
             raise TypeError("Missing parameters for either 'new_vrf' or 'existing_vrf': VRF is required!")
 
-        super().connect_client(client_device, client_port, bkb_router_id, bkb_router_port, cable_bandwidth)
+        super().connect_client(client_device, client_port, bkb_router_id, bkb_router_port, custom_scr, cable_bandwidth)
 
         # Network Address Assignment
         self.assign_network_ip_address(network_address, bkb_router_id, client_device.id())
@@ -215,11 +217,14 @@ class L3VPNBackbone(Backbone):
 
         # Client routing configuration
         self[client_device.id()].client_connection_routing(client_port)
-        self[client_device.id()].send_script()
 
         # Update client description
         (self[bkb_router_id].interface(bkb_router_port)
          .config(description=f"CLIENT_{vrf}::CONNECTION_WITH_{self[client_device.id()]}"))
+
+    def clear_vrf_setup_commands(self) -> None:
+        for vrf in self.get_all_vrfs():
+            vrf.clear_setup_cmd()
 
     def print_client_links(self) -> None:
         def bool_to_str(bool_value: bool) -> str:
@@ -243,28 +248,19 @@ class L3VPNBackbone(Backbone):
         print(tabulate(data, headers=headers))
         print()
 
-    def begin_internal_routing(self, print_to_console: bool = True) -> None:
-        for router in self.get_all_routers():
-            print_log(f"Beginning route in {str(router)}...")
-            router.reference_bw = self.reference_bw
-            router.begin_internal_routing()
-
-    def begin_bgp_routing(self, print_to_console: bool = True) -> None:
+    def begin_bgp_routing(self) -> None:
         provider_edges = [router for router in self.get_all_routers() if router.as_number == self.as_number
                           and router.is_provider_edge() and not router.route_reflector]
 
-        if print_to_console:
-            print_log(f"Beginning BGP routing in {self[self.route_reflector]}...")
+        print_log(f"Beginning BGP routing in {self[self.route_reflector]}...")
         self.get_device(self.route_reflector).bgp_routing(
             initialization=True,
             ibgp_neighbor_ids=[router.id() for router in provider_edges],
             redistribution_to_egp=True
         )
-        self.get_device(self.route_reflector).send_script(print_to_console)
 
         for router in provider_edges:
-            if print_to_console:
-                print_log(f"Beginning BGP routing in {router}...")
+            print_log(f"Beginning BGP routing in {router}...")
             router.bgp_routing(
                 initialization=True,
                 ibgp_neighbor_ids=[self.route_reflector],

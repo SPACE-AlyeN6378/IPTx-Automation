@@ -4,9 +4,12 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from components.devices.switch.switch import Switch
 from components.devices.router.router import Router
+from components.devices.network_device import NetworkDevice
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
 
-from iptx_utils import NetworkError, NotFoundError, smallest_missing_non_negative_integer, print_log, print_success
+from iptx_utils import (NetworkError, NotFoundError, smallest_missing_non_negative_integer, print_log, print_success,
+                        print_error)
+import os
 
 # Referenced Data Types
 Edge = Tuple[Switch | Router, Switch | Router, Dict[str, Any]]
@@ -110,7 +113,7 @@ class Topology:
                 break
 
     def connect_devices(self, device_id1: str, port1: str, device_id2: str, port2: str,
-                        cable_bandwidth: int = None) -> None:
+                        cable_bandwidth: int = float('inf')) -> None:
 
         ethernet_types = list(PhysicalInterface.BANDWIDTHS.keys())[1:5]
 
@@ -154,3 +157,24 @@ class Topology:
                 font_size=10)
 
         plt.show()
+
+    def explore_configs(self, copy_to_clipboard=True):
+        print('\n')
+        all_configs = {device.id(): device.generate_script() for device in self.get_all_devices()}
+
+        print("Enter device ID to show configurations...")
+        prompt = input("> ")
+        while prompt != "exit":
+            try:
+                # os.system("cls")
+                NetworkDevice.print_script(all_configs[prompt])
+                print()
+                if copy_to_clipboard:
+                    NetworkDevice.copy_script(all_configs[prompt])
+
+            except KeyError:
+                if prompt.strip():
+                    print_error(f"Invalid Device ID '{prompt}'")
+            finally:
+
+                prompt = input("> ")

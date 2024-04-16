@@ -12,7 +12,8 @@ from iptx_utils import print_warning, print_log, print_denied, DeviceError, Netw
 class Router(NetworkDevice):
 
     def __init__(self, router_id: str, hostname: str = "Router",
-                 interfaces: Iterable[RouterInterface | Loopback] = None) -> None:
+                 interfaces: Iterable[RouterInterface | Loopback] = None,
+                 mpls_ldp_sync: bool = False) -> None:
 
         self.OSPF_PROCESS_ID: int = 65000
         self.priority: int = 20  # Priority on a scale of 1 to 100
@@ -21,6 +22,7 @@ class Router(NetworkDevice):
         self.as_number: int = 0
         self.route_reflector: bool = False
         self.ibgp_adjacent_router_ids: set[str] = set()
+        self._mpls_ldp_sync = False
 
         super().__init__(device_id=router_id, hostname=hostname)
         self.add_interface(Loopback(cidr=router_id, description=f"LOOPBACK-FHL-{hostname}"))
@@ -135,7 +137,7 @@ class Router(NetworkDevice):
         if self.hostname.endswith("-RR"):
             self.set_hostname(self.hostname.replace("-RR", ""))
 
-    def begin_internal_routing(self, mpls_ldp_sync: bool = False) -> None:
+    def begin_internal_routing(self) -> None:
         # Configure OSPF for all interfaces
         for interface in self.all_phys_interfaces():
             # The interface should be connected to another router, and within autonomous system
@@ -161,7 +163,7 @@ class Router(NetworkDevice):
         if self._any_mpls_interfaces():
             self._routing_commands["ospf"].append("mpls ldp autoconfig")
 
-            if mpls_ldp_sync:
+            if self._mpls_ldp_sync:
                 self._routing_commands["ospf"].append("mpls ldp sync")
 
         self._routing_commands["ospf"].append("exit")
@@ -266,7 +268,7 @@ class Router(NetworkDevice):
         else:
             print_denied("The BGP routing is not yet initialized")
 
-    def _mpls_ldp_activate(self) -> None:
+    def _generate_mpls_ldp_config(self) -> None:
         """
         If MPLS is enabled in any interfaces, enable LDP synchronization
         :return:
@@ -299,6 +301,7 @@ class Router(NetworkDevice):
                     f"router bgp {self.as_number}",
                     f"bgp router-id {self.id()}",
                     f"network {self.id()} mask 255.255.255.255",
+                    "redistribute connected",
                     "exit"
                 ]
             self._routing_commands["client-connection"].insert(-1, f"neighbor {remote_int_ip_address} "
@@ -311,7 +314,7 @@ class Router(NetworkDevice):
         script = []
 
         # # Generate a script for any MPLS routing
-        self._mpls_ldp_activate()
+        self._generate_mpls_ldp_config()
 
         # Transfer all the VRF commands to a single list
         self._consolidate_vrf_setup_commands()
@@ -330,7 +333,7 @@ class Router(NetworkDevice):
 
         # Iterate through each interface
         for interface in self.all_interfaces():
-            script.extend(interface.generate_command_block())
+            script.extend(interface.generate_config())
 
         # Iterate through each routing command
         for attr in self._routing_commands.keys():

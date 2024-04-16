@@ -44,10 +44,46 @@ def cisco_7200(rtr_id: str, name: str, as_number: int = None) -> Router:
     if as_number:
         router.as_number = as_number
 
+    for interface in router.all_phys_interfaces():
+        interface.use_service_instance = True
+
     return router
 
 
-def cisco_xr_9000(rtr_id: str, name: str) -> Router:
+def gns3_c7200(rtr_id: str, name: str, as_number: int = None) -> Router:
+    router = Router(
+        router_id=rtr_id,
+        hostname=name,
+        interfaces=[
+            RouterInterface("FastEthernet", "0/0"),
+            RouterInterface("FastEthernet", "0/1"),
+            RouterInterface("GigabitEthernet", "1/0"),
+            RouterInterface("GigabitEthernet", "2/0")
+        ],
+        mpls_ldp_sync=False
+    )
+    if as_number:
+        router.as_number = as_number
+
+    return router
+
+
+def gns3_ce_router(rtr_id: str, name: str, as_number: int = None) -> Router:
+    router = Router(
+        router_id=rtr_id,
+        hostname=name,
+        interfaces=[
+            RouterInterface("GigabitEthernet", "0/0")
+        ],
+        mpls_ldp_sync=False
+    )
+    if as_number:
+        router.as_number = as_number
+
+    return router
+
+
+def cisco_xr_9000(rtr_id: str, name: str) -> XRRouter:
     return XRRouter(
         router_id=rtr_id,
         hostname=name,
@@ -61,4 +97,23 @@ def cisco_xr_9000(rtr_id: str, name: str) -> Router:
             RouterInterface("GigabitEthernet", "0/0/0/6"),
             RouterInterface("GigabitEthernet", "0/0/0/7")
         ],
+        mpls_ldp_sync=True
+    )
+
+
+def gns3_cisco_xr(rtr_id: str, name: str) -> XRRouter:
+    return XRRouter(
+        router_id=rtr_id,
+        hostname=name,
+        interfaces=[
+            RouterInterface("GigabitEthernet", "0/0/0/0"),
+            RouterInterface("GigabitEthernet", "0/0/0/1"),
+            RouterInterface("GigabitEthernet", "0/0/0/2"),
+            RouterInterface("GigabitEthernet", "0/0/0/3"),
+            RouterInterface("GigabitEthernet", "0/0/0/4"),
+            RouterInterface("GigabitEthernet", "0/0/0/5"),
+            RouterInterface("GigabitEthernet", "0/0/0/6"),
+            RouterInterface("GigabitEthernet", "0/0/0/7")
+        ],
+        mpls_ldp_sync=False
     )

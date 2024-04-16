@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-from typing import List, Iterable, Any
+from typing import List, Iterable, Any, TYPE_CHECKING
 
 from iptx_utils import NetworkError
 from components.interfaces.physical_interfaces.physical_interface import PhysicalInterface
+
 from components.interfaces.loopback.loopback import Loopback
 from iptx_utils import NotFoundError, smallest_missing_non_negative_integer, CommandsDict
 from colorama import Style, Fore
+
+
+if TYPE_CHECKING:
+    from components.interfaces.physical_interfaces.router_interface import RouterInterface
+    from components.devices.router.router import Router
+
 import re
-
-
 import pyperclip
 
 
@@ -20,7 +25,19 @@ class NetworkDevice:
 
     # Print out the script
     @staticmethod
-    def print_script(commands: Iterable[str], color=Fore.WHITE):
+    def print_script(commands: Iterable[str], color=Fore.LIGHTYELLOW_EX):
+
+        def find_sections(line):
+            regex_patterns = [
+                r"\bl2vpn\b",
+                r"^xconnect\s+group\s+\S+",
+                r"^p2p\s+\S+"
+            ]
+            for pattern in regex_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    return match.group()  # Return the matched string
+            return None  # Return None if no match is found
 
         indent_size = 0
         allow_indenting_vrf = True
@@ -47,6 +64,7 @@ class NetworkDevice:
                     command_line[:5] == "area " or
                     command_line[:14] == "address-family" or
                     command_line[:14] == "neighbor-group" or
+                    command_line[:17] == "service instance " or
                     command_line[:3] == "vrf"):
 
                 if command_line[:9] == "interface" and "vrf" in commands[index+1]:
@@ -61,6 +79,9 @@ class NetworkDevice:
                     indent_size += 1
 
             if command_line == "mpls ldp":
+                indent_size += 1
+
+            if find_sections(command_line):
                 indent_size += 1
 
             if command_line[:8] == "neighbor" and not command_line[:14] == "neighbor-group":
@@ -89,6 +110,7 @@ class NetworkDevice:
 
         # Attributes
         self.__device_id: str = device_id
+        self.as_number: int = 0
         self.hostname: str = hostname
         self.__phys_interfaces: List[PhysicalInterface] = []
         self.__loopbacks: List[Loopback] = []
@@ -224,19 +246,24 @@ class NetworkDevice:
                 interface.port = smallest_missing_non_negative_integer(ports)
                 self.__loopbacks.append(interface)
 
-    def remove_interface(self, interface_or_port: str | PhysicalInterface | Loopback) -> PhysicalInterface | Loopback:
-        if isinstance(interface_or_port, str):  # If it is a port number
-            interface = self.interface(interface_or_port)
-        else:
-            interface = interface_or_port
+    def get_remote_interface(self, port: str) -> PhysicalInterface | Any:
+        remote_device = self.interface(port).remote_device
+        remote_port = self.interface(port).remote_port
 
-        if isinstance(interface, PhysicalInterface):
-            self.__phys_interfaces.remove(interface)
+        if all([remote_device, remote_port]):
+            return remote_device.interface(remote_port)
 
-        elif isinstance(interface, Loopback):
-            self.__loopbacks.remove(interface)
+        return None
 
-        return interface
+    def get_gateway_interface(self, as_number: int) -> 'RouterInterface':
+        # This function is only used by client-edge routers
+        for interface in self.__phys_interfaces:
+            if interface.remote_device:
+                if interface.remote_device.as_number == as_number:
+                    remote_port = interface.remote_port
+                    return interface.remote_device.interface(remote_port)
+
+        raise NotFoundError(f"No gateway interfaces with AS Number {as_number}")
 
     def check_for_duplicate_network_address(self):
         for interface in self.__phys_interfaces:
@@ -260,7 +287,7 @@ class NetworkDevice:
 
         # Iterate through each interface
         for interface in self.all_interfaces():
-            script.extend(interface.generate_command_block())
+            script.extend(interface.generate_config())
 
         script.append("end")
         return script
