@@ -10,6 +10,9 @@ class SubInterface(Interface):
         self.mtu: int = mtu
         self.xr_mode: bool = False
 
+        self.neighbor_ids = set()
+
+        self.pw_redundancy_configured = False
         self._cisco_commands.update({
             "pseudo-wire": []
         })
@@ -39,20 +42,43 @@ class SubInterface(Interface):
 
         return False
 
-    def generate_pseudowire_config(self, neighbor_id: int) -> None:
-        self._cisco_commands["pseudo-wire"] = [
-            f"encapsulation dot1q {self.vlan_id}",
-            f"mtu {self.mtu}"
-        ]
+    def pseudowire_config(self, neighbor_id: str = None) -> None:
+
+        if not self._cisco_commands["pseudo-wire"]:
+            self._cisco_commands["pseudo-wire"] = [
+                f"encapsulation dot1q {self.vlan_id}",
+                f"mtu {self.mtu}"
+            ]
 
         if not self.xr_mode:
-            self._cisco_commands["pseudo-wire"].insert(1, f"xconnect {neighbor_id} "
-                                                          f"{self.vlan_id} encapsulation mpls")
+            self._cisco_commands["pseudo-wire"].insert(-1, f"xconnect {neighbor_id} "
+                                                           f"{self.vlan_id} encapsulation mpls")
+
+        if neighbor_id in self.neighbor_ids:
+            self.pw_redundancy_configured = False
+        else:
+            self.neighbor_ids.add(neighbor_id)
 
     def generate_config(self):
         configs = super().generate_config()
 
         if configs and self.xr_mode:
             configs[0] += " l2transport"
+
+        return configs
+
+    def generate_pw_redundancy_config(self) -> list[str]:
+        # This function goes inside the L2VPN section in IOS-XR
+        configs = []
+        if not self.pw_redundancy_configured:
+            configs = [
+                f"interface {str(self)}",
+                "exit"
+            ]
+            for neighbor_id in self.neighbor_ids:
+                configs.insert(-1, f"neighbor ipv4 {neighbor_id} pw-id {self.vlan_id}")
+                configs.insert(-1, "exit")
+
+            self.pw_redundancy_configured = True
 
         return configs

@@ -3,8 +3,7 @@ from components.interfaces.physical_interfaces.router_interface import RouterInt
 from typing import Iterable
 from tabulate import tabulate
 
-from iptx_utils import NetworkError, print_log, print_table, \
-    smallest_missing_non_negative_integer
+from iptx_utils import NetworkError, print_log, smallest_missing_non_negative_integer, NotFoundError
 
 
 class Backbone(Topology):
@@ -116,7 +115,7 @@ class Backbone(Topology):
             edge[2]["network_address"] = network_address
 
     def connect_devices(self, device_id1: str, port1: str, device_id2: str, port2: str,
-                        scr: int = None, cable_bandwidth: int = None) -> None:
+                        scr: int = None, cable_bandwidth: int = float('inf')) -> None:
 
         super().connect_devices(device_id1, port1, device_id2, port2, cable_bandwidth)
 
@@ -124,7 +123,8 @@ class Backbone(Topology):
         self.__assign_scr(device_id1, device_id2, scr)  # This is used to check whether the SCR is already in
 
     def connect_internal_devices(self, device_id1: str, port1: str, device_id2: str, port2: str,
-                                 network_address: str = None, scr: int = None, cable_bandwidth: int = None) -> None:
+                                 network_address: str = None, scr: int = None,
+                                 cable_bandwidth: int = float('inf')) -> None:
 
         if not network_address:
             raise NetworkError("IP Network address is required for link identification")
@@ -141,6 +141,8 @@ class Backbone(Topology):
         # Update the reference bandwidth
         new_ref_bandwidth: int = self.get_link(device_id1, device_id2)[2]["bandwidth"]
         self.__update_reference_bw(new_ref_bandwidth)
+        self[device_id1].reference_bw = self.reference_bw
+        self[device_id2].reference_bw = self.reference_bw
 
         # Enable MPLS to routers, if both the routers are within the same autonomous system
         self[device_id1].interface(port1).mpls_enable()
@@ -154,8 +156,8 @@ class Backbone(Topology):
         self.get_link(device_id1, device_id2)[2]["external"] = False
 
     def connect_client(self, client_device: Router | Switch, client_port: str,
-                       bkb_router_id: str | int, bkb_router_port: str, client_group: str,
-                       cable_bandwidth: int = None):
+                       bkb_router_id: str | int, bkb_router_port: str, custom_scr: int = None,
+                       cable_bandwidth: int = float('inf')):
 
         self.print_log(f"Requesting external connection of Client {str(client_device)} to the backbone...")
 
@@ -171,7 +173,8 @@ class Backbone(Topology):
         elif isinstance(client_device, Switch):
             self.add_switch(client_device)
 
-        self.connect_devices(bkb_router_id, bkb_router_port, client_device.id(), client_port, cable_bandwidth)
+        self.connect_devices(bkb_router_id, bkb_router_port, client_device.id(), client_port, custom_scr,
+                             cable_bandwidth)
 
         # Switch the interfaces to EGP on both sides, since it's an external route
         self[client_device.id()].interface(client_port).egp = True
@@ -187,6 +190,13 @@ class Backbone(Topology):
     def get_all_client_devices(self) -> list[Router | Switch]:
         return ([device for device in self.get_all_routers() if device.as_number != self.as_number]
                 + self.get_all_switches())
+
+    def get_gateway_inf_from_client(self, client_id: str) -> RouterInterface:
+        for device in self.get_all_client_devices():
+            if device.id() == client_id:
+                return device.get_gateway_interface(self.as_number)
+
+        raise NotFoundError(f"Client with ID {client_id} not found")
 
     def begin_internal_routing(self) -> None:
         for router in self.get_all_routers():

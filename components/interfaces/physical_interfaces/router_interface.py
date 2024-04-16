@@ -33,6 +33,7 @@ class RouterInterface(PhysicalInterface):
 
         # Pseudo-wire
         self.use_service_instance = False
+        self.vlans_in_service_instance: set[int] = set()
         self.__pseudowire_commands: dict[int, List[str]] = dict()
 
         self.egp: bool = False
@@ -204,9 +205,9 @@ class RouterInterface(PhysicalInterface):
                                                     line in self.__ospf_commands[attribute])
                 self.__ospf_commands[attribute].clear()
 
-            for attribute in self.__pseudowire_commands.keys():
-                self._cisco_commands["pseudo-wire"].extend(f"ip ospf {line}" for
-                                                           line in self.__ospf_commands[attribute])
+            for vlan in self.__pseudowire_commands.keys():
+                self._cisco_commands["pseudo-wire"].extend(self.__pseudowire_commands[vlan])
+                self.__pseudowire_commands[vlan].clear()
 
         else:
             # Replace IP with IPv4 in the IP Address section
@@ -243,12 +244,33 @@ class RouterInterface(PhysicalInterface):
         sub_interface.xr_mode = self.xr_mode
         self.sub_interfaces.add(sub_interface)
 
-    def generate_pseudowire_config(self, vlan_id: int, neighbor_id: int) -> None:
+    def pseudowire_config(self, vlan_id: int, neighbor_id: str, description: str = None) -> None:
         if self.use_service_instance and not self.xr_mode:
-            self.__pseudowire_commands[vlan_id] = [
-                f"service instance {vlan_id} ethernet",
-                f"encapsulation dot1q {vlan_id}",
-                f"xconnect {neighbor_id} {vlan_id} encapsulation mpls",
-                f"mtu {self.mtu}",
-                "exit"
-            ]
+            self.vlans_in_service_instance.add(vlan_id)
+
+            if vlan_id not in self.__pseudowire_commands:
+                self.__pseudowire_commands[vlan_id] = [
+                    f"service instance {vlan_id} ethernet",
+                    f"encapsulation dot1q {vlan_id}",
+                    f"mtu {self.mtu}",
+                    "exit"
+                ]
+
+            self.__pseudowire_commands[vlan_id].insert(-2, f"xconnect {neighbor_id} "
+                                                           f"{vlan_id} encapsulation mpls")
+
+        else:
+            if self.get_sub_if(vlan_id) is None:
+                self.add_sub_if(vlan_id)
+
+            if description:
+                self.get_sub_if(vlan_id).config(description=description)
+
+            self.get_sub_if(vlan_id).pseudowire_config(neighbor_id)
+
+    def get_vlan_ids(self) -> set[int]:
+        if self.use_service_instance and not self.xr_mode:
+            return self.vlans_in_service_instance
+
+        else:
+            return set([sub_if.vlan_id for sub_if in self.sub_interfaces])

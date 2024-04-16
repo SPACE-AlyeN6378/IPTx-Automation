@@ -5,8 +5,11 @@ from components.devices.router.router import (Router, RouterInterface, Loopback,
 class XRRouter(Router):
 
     def __init__(self, router_id: str, hostname: str = "Router",
-                 interfaces: Iterable[RouterInterface | Loopback] = None) -> None:
-        super().__init__(router_id, hostname, interfaces)
+                 interfaces: Iterable[RouterInterface | Loopback] = None,
+                 mpls_ldp_sync: bool = False) -> None:
+        super().__init__(router_id, hostname, interfaces, mpls_ldp_sync)
+        self.xc_group_name: str = "untitled"
+        self.xc_p2p_identifier: str = "untitled"
 
         self._bgp_commands: dict[str, list[str]] = {
             "start": [],
@@ -17,6 +20,8 @@ class XRRouter(Router):
             "external": [],
             "close": []
         }
+
+        self._routing_commands.update({"l2vpn": []})
 
     def __str__(self) -> str:
         name = "XR " + super().__str__()
@@ -33,7 +38,7 @@ class XRRouter(Router):
         for vrf in self.vrfs:
             self._starter_commands["vrf"].extend(vrf.get_xr_setup_cmd())
 
-    def begin_internal_routing(self, mpls_ldp_sync: bool = True) -> None:
+    def begin_internal_routing(self) -> None:
         super().begin_internal_routing()
 
         # Regenerate Cisco command to translate to XR configuration script
@@ -56,7 +61,7 @@ class XRRouter(Router):
 
                 elif interface.remote_device is not None and not interface.egp:
                     # Add the XR commands
-                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands(mpls_ldp_sync))
+                    self._routing_commands["ospf"].extend(interface.generate_ospf_xr_commands(self._mpls_ldp_sync))
 
             self._routing_commands["ospf"].append("exit")
 
@@ -183,7 +188,7 @@ class XRRouter(Router):
 
         execute_function()
 
-    def _mpls_ldp_activate(self) -> None:
+    def _generate_mpls_ldp_config(self) -> None:
         if self._any_mpls_interfaces() and not self._mpls_configured:
             self._routing_commands["mpls"] = [
                 "mpls ldp",
@@ -197,6 +202,21 @@ class XRRouter(Router):
 
             self._routing_commands["mpls"].append("exit")
             self.__mpls_configured = True
+
+    def l2vpn_xc_config(self, xc_group_name: str = None, p2p_identifier: str = None) -> None:
+        if xc_group_name:
+            self.xc_group_name = xc_group_name
+        if p2p_identifier:
+            self.xc_p2p_identifier = p2p_identifier
+
+        self._routing_commands["l2vpn"] = ["l2vpn", f"xconnect group {self.xc_group_name}",
+                                           f"p2p {self.xc_p2p_identifier}"]
+        for interface in self.all_phys_interfaces():
+            for sub_if in interface.sub_interfaces:
+                sub_if.pw_redundancy_configured = False
+                self._routing_commands["l2vpn"].extend(sub_if.generate_pw_redundancy_config())
+
+        self._routing_commands["l2vpn"].extend(["exit", "exit", "exit"])
 
     def client_connection_routing(self, interface_port: str) -> None:
         chosen_interface = self.interface(interface_port)
