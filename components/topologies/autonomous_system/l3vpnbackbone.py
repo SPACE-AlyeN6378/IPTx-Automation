@@ -235,10 +235,10 @@ class L3VPNBackbone(Backbone):
         data = [[
             str(link[2]['scr']),
             f"{link[0]} ({link[2]['d1_port']}) ---> {link[1]} ({link[2]['d2_port']})",
-            f"{link[2]["network_address"]}",
-            f"{link[2]["vrf"]}",
+            f"{link[2]['network_address']}",
+            f"{link[2]['vrf']}",
             f"{link[2]['bandwidth']}",
-            f"{bool_to_str(link[2]["static_routing"])}"
+            f"{bool_to_str(link[2]['static_routing'])}"
         ] for link in links if link[2]['external']]
 
         headers = ["SCR", "Source/Destination", "Network Address", "VRF", "Bandwidth (KB/s)", "Routing Type"]

@@ -69,7 +69,7 @@ class VLAN:
     def show_pseudowire_graph(self) -> None:
         pos = nx.spring_layout(self.pseudowire_graph)  # Positions for all nodes
         nx.draw(self.pseudowire_graph, pos, with_labels=True,
-                labels={node_id: f"{node_id} ({data["rtr_id"]})" for node_id, data in
+                labels={node_id: f"{node_id} ({data['rtr_id']})" for node_id, data in
                         self.pseudowire_graph.nodes(data=True)},
                 width=2, node_size=1000)
         plt.show()

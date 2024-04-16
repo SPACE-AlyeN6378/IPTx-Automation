@@ -34,6 +34,7 @@ class VRF:
 
     def get_setup_cmd(self) -> List[str]:
         return self.__setup_commands
+
     def get_xr_setup_cmd(self) -> List[str]:
         cisco_xr_commands = []
 
@@ -55,6 +56,9 @@ class VRF:
 
             elif "export" in line:
                 line = line.replace("route-target export", "export route-target")
+
+            elif "exit-address-family" in line:
+                line = line.replace("exit-address-family", "exit")
 
             cisco_xr_commands.append(line)
 

@@ -46,6 +46,7 @@ class XRRouter(Router):
             f"router ospf {self.OSPF_PROCESS_ID}",  # Define the process ID
             f"router-id {self.id()}",  # Router ID
             f"auto-cost reference-bandwidth {self.reference_bw}",  # Cost is autoconfigured using reference BW
+            "mpls ldp auto-config"
         ]
 
         # Iterate through each area
@@ -201,7 +202,7 @@ class XRRouter(Router):
                     self._routing_commands["mpls"].append("exit")
 
             self._routing_commands["mpls"].append("exit")
-            self.__mpls_configured = True
+            self._mpls_configured = True
 
     def l2vpn_xc_config(self, xc_group_name: str = None, p2p_identifier: str = None) -> None:
         if xc_group_name:

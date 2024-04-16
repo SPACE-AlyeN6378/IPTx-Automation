@@ -1,38 +1,40 @@
 from components.topologies.autonomous_system.l3vpnbackbone import L3VPNBackbone
-from components.devices.device_creator import gns3_c7200, gns3_ce_router
+from components.devices.device_creator import gns3_c7200, gns3_ce_router, gns3_cisco_xr
 
 test_ring = L3VPNBackbone(
     as_number=45700,
     name="Testing Ring",
     devices=[
         gns3_c7200("10.255.255.1", "RingR1"),
-        gns3_c7200("10.255.255.2", "RingR2"),
+        gns3_cisco_xr("10.255.255.2", "XR-RingR2"),
         gns3_c7200("10.255.255.3", "RingR3"),
-        gns3_c7200("10.255.255.4", "RingR4"),
-        gns3_c7200("10.255.255.5", "RingR5")
+        gns3_cisco_xr("10.255.255.4", "XR-RingR4"),
+        gns3_cisco_xr("10.255.255.5", "XR-RingR5")
     ],
     route_reflector_id="10.255.255.2"
 )
 
 # Backbone Connection
 device_ids = [device.id() for device in test_ring.get_all_devices()]
+ports = [tuple([interface.port for interface in device.all_phys_interfaces()[:2]]) for device in test_ring.get_all_devices()]
 
 for i, device_id in enumerate(device_ids):
-    print(i, device_ids[i-1], device_id)
     test_ring.connect_internal_devices(
-        device_id1=device_ids[i-1], port1="0/0",
-        device_id2=device_id, port2="0/1",
+        device_id1=device_ids[i-1], port1=ports[i-1][1],
+        device_id2=device_id, port2=ports[i][0],
         network_address=f"12.176.{i}.0"
     )
+
+test_ring.print_backbone_links()
 
 test_ring.begin_internal_routing()
 test_ring.explore_configs()
 
 # Connecting a couple of clients
 clients = {
-    ("10.255.255.1", "192.168.11.0"): gns3_ce_router("1.1.1.1", "BDCOM-Edge1", 200),
-    ("10.255.255.3", "192.168.12.0"): gns3_ce_router("2.2.2.2", "BDCOM-Edge2", 200),
-    ("10.255.255.4", "192.168.13.0"): gns3_ce_router("3.3.3.3", "BDCOM-Edge3", 200)
+    ("10.255.255.2", "192.168.12.0"): gns3_ce_router("2.2.2.2", "BDCOM-Edge1", 200),
+    ("10.255.255.4", "192.168.14.0"): gns3_ce_router("4.4.4.4", "BDCOM-Edge2", 200),
+    ("10.255.255.5", "192.168.15.0"): gns3_ce_router("5.5.5.5", "BDCOM-Edge3", 200)
 }
 
 
@@ -43,7 +45,7 @@ for ip_address_tuple, client in clients.items():
         client_device=client,
         client_port="0/0",
         bkb_router_id=rtr_id,
-        bkb_router_port="2/0",
+        bkb_router_port="0/0/0/2",
         network_address=network_address,
         new_vrf="BDCOM",
         static_routing=False
